@@ -1,0 +1,591 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#include <time.h>
+#include <ctype.h>
+#include <math.h>
+#include <limits.h>
+#include "cs402.h"
+
+#include "my402list.h"
+
+//#define pos  ?,???,???.?? 
+//#define neg (?,???,???.??)
+
+static char gszProgName[MAXPATHLENGTH];
+
+int gnDebug=0;
+
+typedef struct tagMyTranData {
+    	char tType;
+	unsigned int tTime;
+	char tFormattedTime[15];
+	int tAmt;
+	char tFormattedAmt[14];
+	char tDesc[23];		
+} MyTranData;
+
+//Forward Declarations
+void ValidateTranData(char *str[],My402List *pList);
+int ValidateType(char *type,MyTranData *tData);
+int ValidateTime(char *tTime,MyTranData *tData);
+int ValidateAmount(char *amt,MyTranData *tData);
+int ValidateDesc(char *desc,MyTranData *tData);
+int MyTranDataInit(MyTranData* tData);
+void BubbleForward(My402List *pList, My402ListElem **pp_elem1, My402ListElem **pp_elem2);
+void BubbleSortForwardList(My402List *pList, int num_items);
+int FormatAmount(char *fAmt,char *amt,MyTranData *tData,char type);
+int computeBalance(char *bal, int *prevBal, int *prevSign, MyTranData *tData);
+
+
+/* ----------------------- Utility Functions ----------------------- */
+
+static
+void Usage()
+{
+    fprintf(stderr,
+            "usage: %s %s\n",
+            gszProgName, "Sort Test");
+    exit(-1);
+}
+
+static
+FILE *ProcessOptions(int argc, char *argv[])
+{
+	
+	if(argc>3){
+		fprintf(stderr,"Number of arguements provided are more %d\n",argc);
+		Usage();
+	}
+	else if(argc<2){
+		fprintf(stderr,"Number of arguements provided are less %d\n",argc);
+		Usage();
+	}
+	else if(*argv[1] == '-'){
+		fprintf(stderr,"Cannot use this type of command line arguments. Wrong Format %s\n",argv[1]);
+		Usage();
+	}
+	else if(strcmp(argv[1],"sort")!=0){
+		fprintf(stderr,"Invalid command line argument. %s\n",argv[1]);
+		Usage();
+	}
+	else if(argc==2){
+		
+		FILE *fp =NULL;
+		fp = stdin;
+		if(fp==NULL){
+			fprintf(stderr,"Could not read from stdin.\n");
+			Usage();
+		}		
+		return fp;
+	}
+	else if(argc==3){
+	
+		if(*argv[2]=='-'){
+			fprintf(stderr,"Cannot use this type of command line arguments. Wrong Format %s\n",argv[2]);
+			Usage();
+		}
+		
+		FILE *fp = NULL;
+		fp = fopen(argv[2],"r");
+		if(fp==NULL){
+			fprintf(stderr,"Could not open the file. %s\n",argv[2]);
+			Usage();
+		}	
+		return fp;
+	}
+	else{
+		fprintf(stderr,"Could not open the file. \n");
+		Usage();
+	}
+	return NULL;
+}
+
+static
+void SetProgramName(char *s)
+{
+    char *c_ptr=strrchr(s, DIR_SEP);
+
+    if (c_ptr == NULL) {
+        strcpy(gszProgName, s);
+    } else {
+        strcpy(gszProgName, ++c_ptr);
+    }
+}
+
+static 
+void ReadInput(FILE * fp, My402List *pList){
+	char buf[1026] ;
+	char *str[4];
+	int count = 0;
+	while(!(fgets(buf, sizeof(buf), fp) == NULL)){
+		if(strlen(buf)>1024 || strlen(buf)==0){
+        		fprintf(stderr, "Length of the transaction is : %d\n", strlen(buf));
+        		Usage();
+    		}
+		count = 0;
+		char *start_ptr = buf;
+		char *tab_ptr = strchr(start_ptr,'\t');
+		while(tab_ptr != NULL) {				
+			*tab_ptr++ = '\0';
+			str[count] = start_ptr;			
+			start_ptr = tab_ptr;
+			tab_ptr = strchr(start_ptr,'\t');
+			count++;
+			if(count>3){
+        			fprintf(stderr, "The number of fields in the transaction are more : %d\n", count+1);
+        			Usage();
+    			} 
+		}
+		if(count<3){
+        		fprintf(stderr, "The number of fields in the transaction are less : %d\n", count+1);
+        		Usage();
+    		} 
+		str[count] =  start_ptr;
+
+		//Validate Fields
+		ValidateTranData(str,pList);
+	}
+	
+}
+
+
+void ValidateTranData(char *str[],My402List *pList){
+	
+	MyTranData *tData = (MyTranData *)malloc(sizeof(MyTranData));
+	if(!((void*)MyTranDataInit(tData))){
+		printf("Failed to Initialize Transaction Data\n");
+		Usage();
+	}
+	
+	if(!(ValidateType(str[0],tData))){
+		printf("Failed to validate Transaction Type %s\n",str[0]);
+		Usage();
+	}
+	if(!(ValidateTime(str[1],tData))){
+		printf("Failed to validate Transaction Time\n");
+		Usage();
+	}
+	if(!(ValidateAmount(str[2],tData))){
+		printf("Failed to validate Transaction Amount\n");
+		Usage();
+	}
+	if(!(ValidateDesc(str[3],tData))){
+		printf("Failed to validate Transaction Description\n");
+		Usage();
+	}	
+	
+	if(!(My402ListAppend(pList,(void *)tData))){
+		printf("Failed to Append Transaction Data onto the list\n");
+		Usage();
+	}
+}
+
+int ValidateType(char *type,MyTranData *tData){
+
+	int len = strlen(type);
+	if(len>1){
+		printf("Length of Type field is greater than 1\n");
+		Usage();
+	}
+
+	if(strcmp(type,"+") || strcmp(type,"-")){
+		tData->tType = *type;	
+		return TRUE;
+	}
+		
+	return FALSE;
+}
+
+int ValidateTime(char *tTime,MyTranData *tData){
+	
+	int len = strlen(tTime);
+	unsigned int temp = atol(tTime);
+
+	if((len >= 11) || (temp >= INT_MAX) || (temp < 0)){
+		printf("Failed to validate Time\n");
+		Usage();
+	}
+	
+	time_t curTime = time(NULL);
+	if((unsigned int)curTime <= temp) {
+		printf("\nFailed to validate Time\n");
+		Usage();
+	}
+
+	//change the format of time
+	time_t ex = temp;
+		
+	//struct tm * ptm = localtime(&ex);
+	//char *buf;
+	//buf = asctime( ptm );
+	char buf[26];
+	strncpy(buf,ctime(&ex),sizeof(buf));
+
+	//printf("time =  %s ", buf);
+	//int count=0;	
+	int i,j;
+	char ch[15];
+	for(i=0,j=0;i<25;i++){
+		ch[j] = buf[i];
+		if(i == 10){
+			i = i + 9;
+		}
+		j++;
+	}
+	ch[j-1] = '\0';
+	strcpy(tData->tFormattedTime,ch);
+	tData->tTime = temp;
+	
+	return TRUE;
+}
+
+int FormatAmount(char *fAmt,char *amt,MyTranData *tData,char type){
+
+	//start
+	char *buf = amt;
+	char temp[14];
+	int count = 0;
+	int i = 0, j=0;
+	int len = strlen(amt);
+	
+	if(type == '-'){
+		temp[0] = '(';
+		temp[13] = ')';
+	}
+	else{
+		temp[0] = ' ';
+		temp[13] = ' ';
+	}
+		count = 15-(len+2);		
+		if(len > 6){
+			count = count - 1;
+			temp[6] = ',';	
+		}
+		j = count -1;		
+		i = 0; 	//internal count for commas
+		while(*buf != '\0'){
+			if(isdigit(*buf) || (*buf) == '.'){				
+				if(temp[count]!=','){
+					temp[count] = *buf;
+					buf++;	
+				}
+				count++;							
+			}
+		}
+		for(i=1;i<=j;i++)
+			temp[i] = ' ';			
+				
+		temp[14] = '\0';			
+
+	strcpy(fAmt,temp);
+	//end
+	return TRUE;
+
+}
+int ValidateAmount(char *amt,MyTranData *tData){
+
+	char *end = amt +strlen(amt) -1;
+	int count = -2;
+	while(end!=amt){
+		if(isdigit(*end)){
+			count++;
+			end--;
+			if(count>7){
+				printf("\nFailed to validate Amount. More than 7 digits\n");
+				Usage();
+			}
+		}
+		else if(*end == '.' && count == 0){
+			end--;
+			continue;			
+		}
+		else if(*end == '-'){
+			printf("\nFailed to validate Amount. Negative amount.\n");
+			Usage();
+		}
+		else{
+			printf("\nFailed to validate Amount. Not in right format.\n");
+			Usage();
+		}
+	}
+
+	//start
+	/*
+	float tempAmt;
+	if(atof(amt))
+		tempAmt = atof(amt);
+	else{
+		printf("\nFailed to validate Amount. Not a number.\n");
+		Usage();
+	}	
+	int len = strlen(amt);
+	if(tempAmt<0){
+		printf("\nFailed to validate Amount. Negative amount.\n");
+		Usage();
+	}	
+	
+	char *end = amt +len -1;
+	end = end - 2;
+	if(!(*end == '.')){
+		printf("\nFailed to validate Amount\n");
+		Usage();
+	}
+
+	end--;
+	if(!(isdigit(*end))){
+		*end = '0';
+		amt = end;
+	}
+	else {		
+		int count = 0;
+		while(end!=amt){
+			if(isdigit(*end)){
+				count++;
+				end--;
+				if(count>7){
+					printf("\nFailed to validate Amount\n");
+					Usage();
+				}
+			}
+			else{
+				printf("\nFailed to validate Amount. Negative amount.\n");
+				Usage();
+			}	
+		}		
+	}*/
+	float tempAmt = atof(amt);
+	//char *pos = " ?,???,???.?? ", *neg = "(?,???,???.??)";
+	if(tempAmt>=1000000){
+		if(tData->tType == '+')
+			strcpy(tData->tFormattedAmt," ?,???,???.?? ");
+		else{
+			strcpy(tData->tFormattedAmt,"(?,???,???.??");
+			strcat(tData->tFormattedAmt,")");
+		}
+		tData->tAmt = (int)(tempAmt*100);
+		return TRUE;
+	}
+	
+	if(!FormatAmount(tData->tFormattedAmt,amt,tData,tData->tType)){
+		printf("\nFailed to Format Amount\n");
+		Usage();	
+	} 
+ 	tData->tAmt = (int)(tempAmt*100);
+	return TRUE;	
+}
+
+int ValidateDesc(char *desc,MyTranData *tData){
+
+    	// Trim leading space
+    	while(isspace(*desc)) 
+		desc++;    
+
+    	if(*desc == 0) {
+		printf("\nFailed to validate Description\n");
+		Usage();
+    	}
+
+    	// Trim trailing space
+	char *end;
+    	end = desc + strlen(desc) - 1;
+
+  	while(end > desc && isspace(*end)) 
+		end--;
+	
+	//last character to NULL
+	*(++end) = '\0';
+
+	strncpy(tData->tDesc,desc,23);
+	return TRUE;
+}
+
+int MyTranDataInit(MyTranData* tData){
+	memset(tData,0,sizeof(MyTranData));
+	tData->tType = '\0';
+	tData->tTime = 0;
+	//tData->tFormattedTime = time(NULL);
+	memset(tData->tFormattedTime,0,sizeof(char[15]));
+	tData->tAmt = 0;
+	memset(tData->tFormattedAmt,0,sizeof(char[14]));
+	memset(tData->tDesc,0,sizeof(char[23]));
+	return TRUE;
+}
+
+void BubbleForward(My402List *pList, My402ListElem **pp_elem1, My402ListElem **pp_elem2)
+    /* (*pp_elem1) must be closer to First() than (*pp_elem2) */
+{
+    My402ListElem *elem1=(*pp_elem1), *elem2=(*pp_elem2);
+    void *obj1=elem1->obj, *obj2=elem2->obj;
+    My402ListElem *elem1prev=My402ListPrev(pList, elem1);
+/*  My402ListElem *elem1next=My402ListNext(pList, elem1); */
+/*  My402ListElem *elem2prev=My402ListPrev(pList, elem2); */
+    My402ListElem *elem2next=My402ListNext(pList, elem2);
+
+    My402ListUnlink(pList, elem1);
+    My402ListUnlink(pList, elem2);
+    if (elem1prev == NULL) {
+        (void)My402ListPrepend(pList, obj2);
+        *pp_elem1 = My402ListFirst(pList);
+    } else {
+        (void)My402ListInsertAfter(pList, obj2, elem1prev);
+        *pp_elem1 = My402ListNext(pList, elem1prev);
+    }
+    if (elem2next == NULL) {
+        (void)My402ListAppend(pList, obj1);
+        *pp_elem2 = My402ListLast(pList);
+    } else {
+        (void)My402ListInsertBefore(pList, obj1, elem2next);
+        *pp_elem2 = My402ListPrev(pList, elem2next);
+    }
+}
+
+
+void BubbleSortForwardList(My402List *pList, int num_items)
+{
+    My402ListElem *elem=NULL;
+    int i=0;
+
+    if (My402ListLength(pList) != num_items) {
+        fprintf(stderr, "List length is not %1d in BubbleSortForwardList().\n", num_items);
+        exit(1);
+    }
+    for (i=0; i < num_items; i++) {
+        int j=0, something_swapped=FALSE;
+        My402ListElem *next_elem=NULL;
+
+        for (elem=My402ListFirst(pList), j=0; j < num_items-i-1; elem=next_elem, j++) {
+            //int cur_val=(int)(elem->obj), next_val=0;
+	    int cur_val=((MyTranData *)(elem->obj))->tTime, next_val=0;
+            
+	    next_elem=My402ListNext(pList, elem);
+            next_val = ((MyTranData *)(next_elem->obj))->tTime;
+
+            if (cur_val > next_val) {
+                BubbleForward(pList, &elem, &next_elem);
+                something_swapped = TRUE;
+            }
+        }
+        if (!something_swapped) break;
+    }
+}
+
+int computeBalance(char *bal, int *prevBal, int *prevSign, MyTranData *tData){
+	
+	int tempBal = 0;
+	if(tData->tType == '+')
+		tempBal = (*prevSign)*(*prevBal) + tData->tAmt;
+	else
+		tempBal = (*prevSign)*(*prevBal) - tData->tAmt;
+	
+	//char *pos = " ?,???,???.?? ", *neg = "(?,???,???.??)";
+	if(tempBal>=100000000 || tempBal<-100000000){
+		if(tempBal>=100000000)
+			strcpy(bal," ?,???,???.?? ");
+		else{
+			strcpy(bal,"(?,???,???.??");
+			strcat(bal,")");
+		}
+		*prevBal = tempBal;
+		return TRUE;
+    	}
+	
+	
+	char type;
+	if(tempBal<0){
+		type = '-';
+		*prevSign = -1;
+		tempBal = tempBal * (-1);
+	}
+	else 
+		type = '+';
+	float temp1 = ((float)(tempBal))/100;
+	char str[14];
+	sprintf(str,"%.2f",temp1);
+	char *buf = str;
+	if(*buf == '-') 
+		buf++;
+	
+	if(!FormatAmount(bal,str,tData,type)){
+		printf("\nFailed to Format Amount\n");
+		Usage();	
+	}
+	*prevBal = tempBal;
+	return TRUE;
+}
+void PrintStatement(My402List *pList){
+	My402ListElem *elem=NULL;
+
+    	if (My402ListEmpty(pList)) {
+        	fprintf(stderr, "List is Empty.\n");
+        	exit(1);
+    	}
+	printf("+-----------------+--------------------------+----------------+----------------+\n");
+	printf("|       Date      | Description              |         Amount |        Balance |\n");
+        printf("+-----------------+--------------------------+----------------+----------------+\n");
+	
+	int prevBal=0;
+	int prevSign = 1;
+	//char *balance = (char *)malloc(14 * sizeof(char));
+	int balance =0;
+	
+    	for (elem=My402ListFirst(pList); elem != NULL; elem=My402ListNext(pList, elem)) {
+		MyTranData *tData = (MyTranData *)(elem->obj);
+		if(tData->tType == '+')
+			balance = balance + tData->tAmt;
+		else
+			balance = balance - tData->tAmt;
+
+
+		 /*if(!computeBalance(balance,&prevBal,&prevSign,tData)){
+        		fprintf(stderr, "Balance could not be computed.\n");
+        		exit(1);
+    		}*/
+											
+		printf("| %s ",tData->tFormattedTime);
+		printf("| %-24.24s ",tData->tDesc);
+		printf("| %.14s ",tData->tFormattedAmt);
+		if(balance>=100000000)
+			printf("|  ?,???,???.??  |\n",balance);
+			//strcpy(bal," ?,???,???.?? ");
+		else if(balance<-100000000){
+			printf("| (?,???,???.??) |\n",balance);
+			//strcpy(bal,"(?,???,???.??");
+			//strcat(bal,")");
+		}
+		else{
+			printf("| %.14s |\n",(float)balance);	
+		}
+		return TRUE;
+    	}
+			
+    	}
+	printf("+-----------------+--------------------------+----------------+----------------+\n");
+    	fprintf(stdout, "\n");
+}
+/* ----------------------- main() ----------------------- */
+
+int main(int argc, char *argv[])
+{
+    	SetProgramName(*argv);
+    	/*FILE *pFile = (FILE *)malloc(sizeof(FILE));
+	pFile = fopen("tfile.txt","r+");
+	if(pFile == NULL) Usage();*/
+	
+	FILE *pFile = ProcessOptions(argc, argv);
+    	My402List list;
+    	if (!My402ListInit(&list)) {
+    		printf("Unable to Initialise list\n");
+		Usage();
+    	}
+    	ReadInput(pFile, &list);
+	if (pFile != stdin) fclose(pFile);
+	BubbleSortForwardList(&list, My402ListLength(&list));
+	PrintStatement(&list);
+	My402ListUnlinkAll(&list);
+    	return(0);
+}
+
+
+

@@ -1,0 +1,127 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/time.h>
+
+#include "cs402.h"
+
+#include "my402list.h"
+
+static char gszProgName[MAXPATHLENGTH];
+
+int gnDebug=0;
+
+typedef struct tagMyTranData {
+    	char tType[2];
+	unsigned int tTime;
+	int tAmt;
+	char tDesc[23];		
+} MyTranData;
+
+/* ----------------------- Utility Functions ----------------------- */
+
+static
+void Usage()
+{
+    fprintf(stderr,
+            "usage: %s %s\n",
+            gszProgName, "test");
+    exit(-1);
+}
+
+static
+void ProcessOptions(int argc, char *argv[])
+{
+    /*for (argc--, argv++; argc > 0; argc--, argv++) {
+        if (*argv[0] == '-') {
+            if (strcmp(*argv, "-debug") == 0) {
+                gnDebug++;
+            } else {
+                Usage();
+            }
+        } else {
+            Usage();
+        }
+    }*/
+}
+
+static
+void SetProgramName(char *s)
+{
+    char *c_ptr=strrchr(s, DIR_SEP);
+
+    if (c_ptr == NULL) {
+        strcpy(gszProgName, s);
+    } else {
+        strcpy(gszProgName, ++c_ptr);
+    }
+}
+
+static 
+void ReadInput(FILE * fp, My402List *pList){
+	char buf[1026];
+	char str1;
+	char str2[12];
+	char str3[10];
+	char str4[100];	
+	while (!feof(fp)){
+	if(!(fgets(buf, sizeof(buf), fp) == NULL)){
+		printf("buf String1 |%s|\n",buf);
+		char *start_ptr = buf;
+		char *tab_ptr = strchr(start_ptr,'\t');
+		if(*tab_ptr != '\0')
+			*tab_ptr++;
+		}
+	}
+		char *start_ptr = buf;
+		char *tab_ptr = strchr(start_ptr,
+’\t’
+);
+if
+(tab_ptr != NULL) {
+*tab_ptr++ =
+’\0’
+;
+}
+	fscanf(fp,"%s",str1);//,str2,str3,str4);
+	printf("Read String1 |%s|\n",str1);
+   	printf("Read String2 |%s|\n",str2);
+   	printf("Read String3 |%s|\n",str3);
+   	printf("Read string4 |%s|\n",str4);
+	}
+}
+
+/* ----------------------- Test() ----------------------- */
+
+static
+void CreateTestList(My402List *pList, int num_items)
+{
+    int i=0;
+
+    for (i=0; i < num_items; i++) {
+        (void)My402ListAppend(pList, (void*)i);
+    }
+}
+
+/* ----------------------- main() ----------------------- */
+
+int main(int argc, char *argv[])
+{
+    	SetProgramName(*argv);
+    	FILE *pFile = (FILE *)malloc(sizeof(FILE));
+	pFile = fopen("tfile.txt","r+");
+	if(pFile == NULL) Usage();
+	ProcessOptions(argc, argv);
+	
+    	My402List list;
+    	if (!My402ListInit(&list)) {
+    		printf("Unable to Initialise list\n");
+		Usage();
+    	}
+    	ReadInput(pFile, &list);
+	if (pFile != stdin) fclose(pFile);
+	/*SortInput(&list);
+	PrintStatement(&list);*/
+	My402ListUnlinkAll(&list);
+    	return(0);
+}
