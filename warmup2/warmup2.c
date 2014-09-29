@@ -170,7 +170,7 @@ double getTime(struct timeval start,struct timeval end){
 void parseLine(Packet *packet){
 
 	//INCOMPLETE
-	char *token;
+	/*char *token;
 	int count = 0;
 	char ch = '\t';
 	fgets(fileBuf, 1026, fp); 
@@ -194,7 +194,7 @@ void parseLine(Packet *packet){
 	token = strtok(NULL, ch);
 	if(token != NULL)
 		printf( " %s\n", token );
-
+	*/
         //packet->interArrivalTime 
 	//packet->tokensRequired
 	//packet->serviceTime
@@ -226,7 +226,7 @@ void movePktFromQ1toQ2(){
 
 void *arrival(void *arg)
 {   
-	struct timeval prevArrival, arrival, leave;
+	struct timeval prevArrival, currentTime, leave;
 	
 	prevArrival = startTime;
 	leave = prevArrival;
@@ -249,12 +249,12 @@ void *arrival(void *arg)
 		}
 		
 		packet->packetNo = ++i;
-		gettimeofday(&arrival, NULL);
+		gettimeofday(&currentTime, NULL);
 		if(packet->interArrivalTime > getTime(prevArrival,leave))
 			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
 		
-		packet->arrivalTime = getTime(startTime,arrival);
-		prevArrival = getTime(startTime,arrival);
+		packet->arrivalTime = getTime(startTime,currentTime);
+		prevArrival = currentTime;
 		
 		
 		//remove packet if tokens required is more than depth B
@@ -268,7 +268,7 @@ void *arrival(void *arg)
             
 			pthread_mutex_lock(&m);
 
-			My402ListAppend(q1, (void *)packet));
+			My402ListAppend(q1, (void *)packet);
 			packet->q1EnterTime = getTime(startTime, currentTime);
 			printf("%012.3fms: p%d enters Q1\n", packet->q1EnterTime, packet->packetNo); 
 	
@@ -299,7 +299,7 @@ void *arrival(void *arg)
 
 void *token(void *arg)
 {   
-	struct timeval prevArrival, arrival, leave;
+	struct timeval prevArrival, currentTime, leave;
 	prevArrival = startTime;
 	leave = prevArrival;
 	while(params.n <= 0 || !My402ListEmpty(q1)) {
@@ -307,17 +307,17 @@ void *token(void *arg)
 		if((1000/params.r) > getTime(prevArrival,leave))
 			usleep(1000*((1000/params.r) - getTime(prevArrival,leave)));
 
-		gettimeofday(&arrival, NULL);
+		gettimeofday(&currentTime, NULL);
 		g_TokenNumber++;
 
 		pthread_mutex_lock(&m);
 		if(g_TokensInBucket >= params.B) {
-			printf("%012.3fms: token t%d arrives, dropped\n", DiffTime(startTime, arrival), g_TokenNumber); 
+			printf("%012.3fms: token t%d arrives, dropped\n", getTime(startTime, currentTime), g_TokenNumber); 
 			g_TokensDropped++;
 		}
 		else {
 			g_TokensInBucket++;
-			printf("%012.3fms: token t%d arrives, token bucket now has %d tokens\n", DiffTime(starttime, arrival), g_TokenNumber, g_TokensInBucket);
+			printf("%012.3fms: token t%d arrives, token bucket now has %d tokens\n", getTime(startTime, currentTime), g_TokenNumber, g_TokensInBucket);
 		}
 		
 		Packet *headPacket = (Packet *)(My402ListFirst(q1)->obj); 
