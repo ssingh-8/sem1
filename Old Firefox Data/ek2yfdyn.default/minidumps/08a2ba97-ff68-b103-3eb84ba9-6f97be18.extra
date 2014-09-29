@@ -1,0 +1,19 @@
+StartupTime=1410047634
+EMCheckCompatibility=true
+ProductName=Firefox
+Theme=classic/1.0
+Vendor=Mozilla
+InstallTime=1410047634
+ReleaseChannel=release
+Notes=OpenGL: VMware, Inc. -- Gallium 0.4 on llvmpipe (LLVM 3.4, 128 bits) -- 2.1 Mesa 10.1.3 -- texture_from_pixmap\n
+FramePoisonSize=4096
+Version=31.0
+FramePoisonBase=00000000f0dea000
+ServerURL=https://crash-reports.mozilla.com/submit?id={ec8030f7-c20a-464f-9b0e-13a3a9e97384}&version=31.0&buildid=20140715215148
+useragent_locale=chrome://global/locale/intl.properties
+Add-ons=ubufox%40ubuntu.com:2.7,%7B972ce4c6-7e08-4474-a285-3208198ce6fd%7D:31.0,langpack-en-GB%40firefox.mozilla.org:31.0,langpack-en-ZA%40firefox.mozilla.org:31.0
+BuildID=20140715215148
+ProductID={ec8030f7-c20a-464f-9b0e-13a3a9e97384}
+URL=about:startpage
+CrashTime=1410047839
+EventLoopNestingLevel=1
