@@ -169,7 +169,7 @@ My402ListElem *My402ListFind(My402List* pList, void* obj){
 }
 
 int My402ListInit(My402List* pList){
-	pList = (My402List *)malloc(sizeof(My402List));
+	memset(pList,0,sizeof(My402List));
 	pList->num_members = 0;
 	pList->anchor.obj = NULL;
 	pList->anchor.next = NULL;

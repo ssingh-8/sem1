@@ -215,11 +215,11 @@ void movePktFromQ1toQ2(){
 
 void *arrival(void *arg)
 {   
-	struct timeval prevArrival, currentTime, leave;
+	struct timeval currentTime; //prevArrival, currentTime, leave;
 	
-	prevArrival = startTime;
-	leave = startTime;
-	//double timeElapsed = 0.0;
+	//prevArrival = startTime;
+	//leave = prevArrival;
+	double timeElapsed = 0.0;
 	int i;
 	for(i = 0; i < params.n; i++){
 
@@ -239,14 +239,14 @@ void *arrival(void *arg)
 		}
 		
 		packet->packetNo = ++i;
-		//timeElapsed += packet->interArrivalTime;
+		timeElapsed += packet->interArrivalTime;
 		gettimeofday(&currentTime, NULL);
-		if(packet->interArrivalTime > getTime(prevArrival,leave))
-			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
+		if(timeElapsed > getTime(startTime,currentTime))
+			usleep(1000*(timeElapsed - getTime(startTime,currentTime)));
 		
 		gettimeofday(&currentTime, NULL);
-		packet->arrivalTime = getTime(startTime,currentTime);
-		prevArrival = currentTime;
+		packet->arrivalTime = timeElapsed;// getTime(startTime,currentTime);
+		//prevArrival = currentTime;
 		
 		
 		//remove packet if tokens required is more than depth B
@@ -274,48 +274,44 @@ void *arrival(void *arg)
 			}
 			pthread_mutex_unlock(&m);
 		
-		}	
-		gettimeofday(&leave, NULL); 	
+		}		
 	}
 	return NULL;
 }
 
 void *token(void *arg)
 {   
-	struct timeval currentTime, prevArrival, leave;
-	prevArrival = startTime;
-	leave = startTime;
+	struct timeval currentTime; //prevArrival, leave;
+	//prevArrival = startTime;
+	//leave = prevArrival;
 	
-	double tokenRate = 1000.0/params.r;
+	double timeElapsed = 0.0;
 	while(1) {
 		
 		
-		//timeElapsed += (1000.0/params.r) ;
+		timeElapsed += (1000.0/params.r) ;
 		pthread_mutex_lock(&m);
 		if(params.n <= 0 && My402ListEmpty(&q1)) {
 			fprintf(stderr, "No more Packets to process \n");
             		exit(1);
 		}
 		pthread_mutex_unlock(&m);
-
 		gettimeofday(&currentTime, NULL);
-		if(tokenRate > getTime(prevArrival,leave))
-			usleep(1000*(tokenRate - getTime(prevArrival,leave)));
+		if(timeElapsed > getTime(startTime,currentTime))
+			usleep(1000*(timeElapsed - getTime(startTime,currentTime)));
 
 
 		pthread_mutex_lock(&m);
 		g_TokenNumber++;
 
-		gettimeofday(&currentTime, NULL);
-		prevArrival = currentTime;
-
+		
 		if(g_TokensInBucket >= params.B) {
-			printf("%012.3fms: token t%d arrives, dropped\n", getTime(startTime,currentTime), g_TokenNumber); 
+			printf("%012.3fms: token t%d arrives, dropped\n", timeElapsed, g_TokenNumber); 
 			g_TokensDropped++;
 		}
 		else {
 			g_TokensInBucket++;
-			printf("%012.3fms: token t%d arrives, token bucket now has %d tokens\n", getTime(startTime,currentTime), g_TokenNumber, g_TokensInBucket);
+			printf("%012.3fms: token t%d arrives, token bucket now has %d tokens\n", timeElapsed, g_TokenNumber, g_TokensInBucket);
 		}
 		
 		if(!My402ListEmpty(&q1)) {
@@ -329,7 +325,7 @@ void *token(void *arg)
 		}
 		pthread_mutex_unlock(&m);
 			
-		gettimeofday(&leave, NULL); 	
+		//gettimeofday(&leave, NULL); 	
 	}
 	
 	return NULL;

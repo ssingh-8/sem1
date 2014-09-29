@@ -42,7 +42,7 @@ sigset_t set;
 FILE *fp;
 char fileBuf[1026];
 
-My402List *q1,*q2;
+My402List q1,q2;
 Parameters params;
 int traceDriven = 0;
 
@@ -170,34 +170,23 @@ double getTime(struct timeval start,struct timeval end){
 void parseLine(Packet *packet){
 
 	//INCOMPLETE
+
 	char *token;
 	int count = 0;
-	char ch = '\t';
-	fgets(fileBuf, 1026, fp); 
+	//char *ch = '\t';
+	if(fgets(fileBuf, 1026, fp) != NULL) {
+		token = strtok(fileBuf, " \t");
+		packet->interArrivalTime = atof(token);
+		//printf( " %f\n", packet->interArrivalTime );
 
-	char *start_ptr = strchr(fileBuf,'\t');
-	//char *tab_ptr = start_ptr;
-	while(start_ptr != NULL) {
-		*start_ptr = ' ';
-		*start_ptr = strchr(fileBuf,'\t');
-	}
-	
-	token = strtok(fileBuf, ch);
-	if(token != NULL)
-		printf( " %s\n", token );
+		token = strtok(NULL, " \t");
+		packet->tokensRequired = atoi(token);
+		//printf( " %s\n", token );
 
-	
-	token = strtok(NULL, ch);
-	if(token != NULL)
-		printf( " %s\n", token );
-
-	token = strtok(NULL, ch);
-	if(token != NULL)
-		printf( " %s\n", token );
-
-        //packet->interArrivalTime 
-	//packet->tokensRequired
-	//packet->serviceTime
+		token = strtok(NULL, " \t");
+		packet->serviceTime = atof(token);
+		//printf( " %s\n", token );
+	} 	
 }
 
 
@@ -205,18 +194,18 @@ void movePktFromQ1toQ2(){
 	
 	struct timeval currentTime;	
 
-	My402ListElem *elem = My402ListFirst(q1);
+	My402ListElem *elem = My402ListFirst(&q1);
 	Packet *packet = (Packet *)(elem->obj);			
 	
 	g_TokensInBucket -= packet->tokensRequired;
-	My402ListUnlink(q1, elem);	
+	My402ListUnlink(&q1, elem);	
 	
 	gettimeofday(&currentTime, NULL);
 	packet->q1LeaveTime = getTime(startTime, currentTime);
 	
 	printf("%012.3fms: p%d leaves Q1, time in Q1 = %.3fms, token bucket now has %d tokens\n", packet->q1LeaveTime, packet->packetNo, packet->q1LeaveTime-packet->q1EnterTime, g_TokensInBucket);
 		
-	My402ListAppend(q2, elem);
+	My402ListAppend(&q2, elem);
 	gettimeofday(&currentTime, NULL);
 	packet->q2EnterTime = getTime(startTime, currentTime);
 	printf("%012.3fms: p%d enters Q2\n", packet->q2EnterTime, packet->packetNo);
@@ -229,7 +218,8 @@ void *arrival(void *arg)
 	struct timeval prevArrival, currentTime, leave;
 	
 	prevArrival = startTime;
-	leave = prevArrival;
+	leave = startTime;
+	//double timeElapsed = 0.0;
 	int i;
 	for(i = 0; i < params.n; i++){
 
@@ -249,10 +239,12 @@ void *arrival(void *arg)
 		}
 		
 		packet->packetNo = ++i;
+		//timeElapsed += packet->interArrivalTime;
 		gettimeofday(&currentTime, NULL);
-		if(packet->interArrivalTime > getTime(prevArrival,leave))
-			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
+		if(packet->interArrivalTime > getTime(prevArrival,currentTime))
+			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,currentTime)));
 		
+		gettimeofday(&currentTime, NULL);
 		packet->arrivalTime = getTime(startTime,currentTime);
 		prevArrival = currentTime;
 		
@@ -268,68 +260,76 @@ void *arrival(void *arg)
             
 			pthread_mutex_lock(&m);
 
-			My402ListAppend(q1, (void *)packet);
+			My402ListAppend(&q1, (void *)packet);
+			gettimeofday(&currentTime, NULL);
 			packet->q1EnterTime = getTime(startTime, currentTime);
 			printf("%012.3fms: p%d enters Q1\n", packet->q1EnterTime, packet->packetNo); 
 	
-			Packet *headPacket = (Packet *)(My402ListFirst(q1)->obj); 
+			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj); 
 			
 			if(headPacket->tokensRequired <= g_TokensInBucket) {
 				movePktFromQ1toQ2();
-				if(My402ListLength(q2) == 1)
+				if(My402ListLength(&q2) == 1)
 					pthread_cond_broadcast(&cond);				
 			}
 			pthread_mutex_unlock(&m);
 		
-			//check if head packet in q1 can be moved to q2
-			//My402ListElem *elem = My402ListFirst(q1);
-						
-			/*if(headPacket->tokensRequired <= g_TokensInBucket) {
-				movePktFromQ1toQ2();
-				if(My402ListLength(q2) == 1)
-					pthread_cond_broadcast(&cond);				
-			}*/
-
-		}		
-
-		gettimeofday(&leave, NULL); 
+		}	
+		gettimeofday(&leave, NULL); 	
 	}
 	return NULL;
 }
 
 void *token(void *arg)
 {   
-	struct timeval prevArrival, currentTime, leave;
+	struct timeval currentTime, prevArrival, leave;
 	prevArrival = startTime;
-	leave = prevArrival;
-	while(params.n <= 0 || !My402ListEmpty(q1)) {
+	leave = startTime;
+	
+	double tokenRate = 1000.0/params.r;
+	while(1) {
 		
-		if((1000/params.r) > getTime(prevArrival,leave))
-			usleep(1000*((1000/params.r) - getTime(prevArrival,leave)));
+		
+		//timeElapsed += (1000.0/params.r) ;
+		pthread_mutex_lock(&m);
+		if(params.n <= 0 && My402ListEmpty(&q1)) {
+			fprintf(stderr, "No more Packets to process \n");
+            		exit(1);
+		}
+		pthread_mutex_unlock(&m);
 
 		gettimeofday(&currentTime, NULL);
-		g_TokenNumber++;
+		if(tokenRate > getTime(prevArrival,leave))
+			usleep(1000*(tokenRate - getTime(prevArrival,leave)));
+
 
 		pthread_mutex_lock(&m);
+		g_TokenNumber++;
+
+		gettimeofday(&currentTime, NULL);
+		prevArrival = currentTime;
+
 		if(g_TokensInBucket >= params.B) {
-			printf("%012.3fms: token t%d arrives, dropped\n", getTime(startTime, currentTime), g_TokenNumber); 
+			printf("%012.3fms: token t%d arrives, dropped\n", getTime(startTime,currentTime), g_TokenNumber); 
 			g_TokensDropped++;
 		}
 		else {
 			g_TokensInBucket++;
-			printf("%012.3fms: token t%d arrives, token bucket now has %d tokens\n", getTime(startTime, currentTime), g_TokenNumber, g_TokensInBucket);
+			printf("%012.3fms: token t%d arrives, token bucket now has %d tokens\n", getTime(startTime,currentTime), g_TokenNumber, g_TokensInBucket);
 		}
 		
-		Packet *headPacket = (Packet *)(My402ListFirst(q1)->obj); 
+		if(!My402ListEmpty(&q1)) {
+			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj); 
 			
-		if(headPacket->tokensRequired <= g_TokensInBucket) {
-			movePktFromQ1toQ2();
-			if(My402ListLength(q2) == 1)
-				pthread_cond_broadcast(&cond);				
+			if(headPacket->tokensRequired <= g_TokensInBucket) {
+				movePktFromQ1toQ2();
+				if(My402ListLength(&q2) == 1)
+					pthread_cond_broadcast(&cond);				
+			}
 		}
 		pthread_mutex_unlock(&m);
 			
-	gettimeofday(&leave, NULL); 	
+		gettimeofday(&leave, NULL); 	
 	}
 	
 	return NULL;
@@ -348,8 +348,8 @@ int main(int argc, char *argv[])
 	setDefaultParameters();
 	ProcessOptions(argc, argv);
 
-	My402ListInit(q1);
-	My402ListInit(q2);
+	My402ListInit(&q1);
+	My402ListInit(&q2);
 
 	if(traceDriven){
 		if ((fp = fopen(params.fileName, "r")) == NULL) {

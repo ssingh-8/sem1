@@ -5,6 +5,17 @@ void parseLine(Packet *packet){
 	char ch = '\t';
 	fgets(fileBuf, 1026, fp); 
 
+
+	char *temp = fileBuf;
+
+	while(*temp!='\0'){
+		while(isdigit(*temp)){
+			
+		}
+			
+			
+	}
+
 	char *start_ptr = strchr(fileBuf,'\t');
 	//char *tab_ptr = start_ptr;
 	while(start_ptr != NULL) {
