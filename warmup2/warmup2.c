@@ -164,7 +164,7 @@ void SetProgramName(char *s)
 
 
 double getTime(struct timeval start,struct timeval end){
-	return (((end.tv_sec - start.tv_sec)*1000) + ((end.tv_usec - start.tv_usec)/1000));
+	return (((end.tv_sec - start.tv_sec)*1000.0) + ((end.tv_usec - start.tv_usec)/1000.0));
 }
 
 void parseLine(Packet *packet){
@@ -244,7 +244,7 @@ void *arrival(void *arg)
 		//printf("\n currentTime sec = %d\t usec = %d\n",currentTime.tv_sec,currentTime.tv_usec);
 		//printf("\n packet->interArrivalTime = %012.3f\n",packet->interArrivalTime);
 		//printf("\n prevArrival = %d\n",prevArrival);
-		printf("\n getTime(prevArrival,leave) = %f\n",getTime(prevArrival,leave));
+		//printf("\n getTime(prevArrival,leave) = %f\n",getTime(prevArrival,leave));
 		if(packet->interArrivalTime > getTime(prevArrival,leave))
 			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
 		
@@ -303,8 +303,9 @@ void *token(void *arg)
 		}
 		pthread_mutex_unlock(&m);
 
-		printf("\nTokenRate = %f\n",tokenRate);
+		
 		gettimeofday(&currentTime, NULL);
+		//printf("\ngetTime(prevArrival,leave) = %f\n",getTime(prevArrival,leave));
 		if(tokenRate > getTime(prevArrival,leave))
 			usleep(1000*(tokenRate - getTime(prevArrival,leave)));
 
