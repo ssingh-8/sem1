@@ -51,7 +51,7 @@ struct timeval startTime;
 
 void setDefaultParameters(){
 	
-	params.lamda = 0.5;
+	params.lambda = 0.5;
 	params.r = 1.5;
 	params.mu = 0.35;
 	params.B = 10;
@@ -79,17 +79,17 @@ void ProcessOptions(int argc, char *argv[]){
 	int i;
 	for(i = 1; i < argc; i++) {
 
-		if(strcmp(argv[i], "-lamda") == 0){
-			params.lamda = atof(argv[++i]);
-			if(params.lamda <= 0) {
-				fprintf(stderr,"\nError: lamda must be a positive real number <%s>\n",argv[i]);
+		if(strcmp(argv[i], "-lambda") == 0){
+			params.lambda = atof(argv[++i]);
+			if(params.lambda <= 0) {
+				fprintf(stderr,"\nError: lambda must be a positive real number <%s>\n",argv[i]);
 				exit(-1);
 			}
-			if(params.lamda < 0.1)
-				params.lamda = 0.1;
+			if(params.lambda < 0.1)
+				params.lambda = 0.1;
 			//To Do : check for values 0.gf33 etc
 
-			//printf("\n Lamda = %f\n",params.lamda);
+			//printf("\n lambda = %f\n",params.lambda);
 		}
 
 		else if(strcmp(argv[i], "-mu") == 0){
@@ -163,6 +163,23 @@ void SetProgramName(char *s)
     }
 }
 
+void printEmulationParameters(){
+   printf("Emulation Parameters:\n");
+   printf("\tnumber to arrive = %d\n", params.n);
+   if (traceDriven) {
+	        printf("\tr = %g\n", params.r);
+	        printf("\tB = %d\n", params.B);
+	        printf("\ttsfile = %s\n", params.fileName);
+   }
+   else {
+	        printf("\tlambda = %g\n", params.lambda);
+	        printf("\tmu = %g\n", params.mu);
+	        printf("\tr = %g\n", params.r);
+	        printf("\tB = %d\n", params.B);
+	        printf("\tP = %d\n", params.P);
+   }
+   printf("\n");
+}
 
 double getTime(struct timeval start,struct timeval end){
 	return (((end.tv_sec - start.tv_sec)*1000.0) + ((end.tv_usec - start.tv_usec)/1000.0));
@@ -171,20 +188,15 @@ double getTime(struct timeval start,struct timeval end){
 void parseLine(Packet *packet){
 
 	char *token;
-	int count = 0;
-	//char *ch = '\t';
 	if(fgets(fileBuf, 1026, fp) != NULL) {
 		token = strtok(fileBuf, " \t");
 		packet->interArrivalTime = atof(token);
-		//printf( " %f\n", packet->interArrivalTime );
 
 		token = strtok(NULL, " \t");
 		packet->tokensRequired = atoi(token);
-		//printf( " %s\n", token );
 
 		token = strtok(NULL, " \t");
 		packet->serviceTime = atof(token);
-		//printf( " %s\n", token );
 	} 	
 }
 
@@ -238,7 +250,7 @@ void *arrival(void *arg)
 			parseLine(packet);
 		}
 		else{
-			packet->interArrivalTime = 1000.0/params.lamda;
+			packet->interArrivalTime = 1000.0/params.lambda;
 			packet->tokensRequired = params.P;
 			packet->serviceTime = 1000.0/params.mu;	
 		}
@@ -306,7 +318,7 @@ void *token(void *arg)
 
 		if(g_PacketsCreated == params.n && My402ListEmpty(&q1)) {
 			//fprintf(stderr, "No more Packets to process \n");
-            		exit(1);
+            		pthread_exit(1);
 		}
 		pthread_mutex_unlock(&m);
 
@@ -360,13 +372,15 @@ void *server(void *arg)
 			if(My402ListEmpty(&q2)){
 				pthread_cond_wait(&cond, &m);
 			}
-
+			pthread_mutex_unlock(&m);
 			gettimeofday(&processTime, NULL);
 
+			pthread_mutex_lock(&m);
 			Packet *packet = (Packet *)(My402ListFirst(&q2)->obj);
 			gettimeofday(&currentTime, NULL);
 
 			My402ListUnlink(&q2, My402ListFirst(&q2));
+			pthread_mutex_unlock(&m);
 
 			packet->q2LeaveTime = getTime(startTime,currentTime);
 			printf("%012.3fms: p%d leaves Q2, time in Q2 = %.3fms\n", packet->q2LeaveTime, packet->packetNo, (packet->q2LeaveTime)-(packet->q2EnterTime));
@@ -383,7 +397,12 @@ void *server(void *arg)
 			packet->serviceEndTime = getTime(startTime,currentTime);
 			printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
 
-			pthread_mutex_unlock(&m);
+			g_PacketsCompleted++;
+
+			/*pthread_mutex_lock(&m);
+			if(My402ListEmpty(&q1) && g_PacketsCreated==params.n)
+				pthread_exit(1);
+			pthread_mutex_unlock(&m);*/
 	}
 	return NULL;
 }
@@ -395,6 +414,7 @@ int main(int argc, char *argv[])
 	setDefaultParameters();
 	ProcessOptions(argc, argv);
 
+	printEmulationParameters();
 	My402ListInit(&q1);
 	My402ListInit(&q2);
 

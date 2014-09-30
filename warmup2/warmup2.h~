@@ -34,8 +34,10 @@ typedef struct tagParameters {
 
 } Parameters;
 
-
+static void Usage();
+void ProcessOptions(int argc, char *argv[]);
 void setDefaultParameters();
+void printEmulationParameters();
 Packet *createPacket();
 
 void *arrival(void *);

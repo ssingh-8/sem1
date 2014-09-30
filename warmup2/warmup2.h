@@ -24,7 +24,7 @@ typedef struct tagPacket {
 
 typedef struct tagParameters {
 
-	double lamda;
+	double lambda;
 	double r;
 	double mu;
 	int B;
@@ -37,6 +37,7 @@ typedef struct tagParameters {
 static void Usage();
 void ProcessOptions(int argc, char *argv[]);
 void setDefaultParameters();
+void printEmulationParameters();
 Packet *createPacket();
 
 void *arrival(void *);
