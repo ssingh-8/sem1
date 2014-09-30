@@ -164,6 +164,10 @@ void SetProgramName(char *s)
 
 
 double getTime(struct timeval start,struct timeval end){
+
+	printf("\n end.tv_sec = %d\t end.tv_usec = %d\n",end.tv_sec,end.tv_usec);
+	printf("\n start.tv_sec = %d\t start.tv_usec = %d\n",start.tv_sec,start.tv_usec);
+
 	return (((end.tv_sec - start.tv_sec)*1000) + ((end.tv_usec - start.tv_usec)/1000));
 }
 
@@ -241,15 +245,16 @@ void *arrival(void *arg)
 		packet->packetNo = ++i;
 		//timeElapsed += packet->interArrivalTime;
 		gettimeofday(&currentTime, NULL);
+		printf("\n currentTime sec = %d\t usec = %d\n",currentTime.tv_sec,currentTime.tv_usec);
 		printf("\n packet->interArrivalTime = %012.3f\n",packet->interArrivalTime);
-		printf("\n prevArrival = %012.3f\n",prevArrival);
-		printf("\n leave = %012.3f\n",leave);
+		printf("\n prevArrival = %d\n",prevArrival);
+		printf("\n leave = %d\n",leave);
 		if(packet->interArrivalTime > getTime(prevArrival,leave))
 			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
 		
 		gettimeofday(&currentTime, NULL);
 		packet->arrivalTime = getTime(startTime,currentTime);
-		printf("\n currentTime = %012.3f\n",currentTime);
+		printf("\n currentTime = %d\n",currentTime);
 		prevArrival = currentTime;
 		
 		
@@ -302,6 +307,7 @@ void *token(void *arg)
 		}
 		pthread_mutex_unlock(&m);
 
+		printf("\nTokenRate = %f\n",tokenRate);
 		gettimeofday(&currentTime, NULL);
 		if(tokenRate > getTime(prevArrival,leave))
 			usleep(1000*(tokenRate - getTime(prevArrival,leave)));
@@ -375,7 +381,7 @@ int main(int argc, char *argv[])
 	error = pthread_sigmask(SIG_BLOCK,&set,NULL);
 
 	gettimeofday(&startTime, NULL); 
-	//printf("%d seconds\n", startTime.tv_sec); 
+	printf("\nstarttime = %d\n", startTime); 
     	//printf("%d microseconds\n", startTime.tv_usec); 
 
 	printf("%012.3fms: emulation begins\n",getTime(startTime,startTime));
@@ -390,12 +396,14 @@ int main(int argc, char *argv[])
         	fprintf(stderr, "\ncan't create arrival thread :[%s]", strerror(error));
 		exit(1);
 	}
-
+	gettimeofday(&startTime, NULL); 
+	printf("\nstarttime = %d\n", startTime); 
 	if((error = pthread_create(&tokenThread, 0, token, NULL))){
             	fprintf(stderr, "\ncan't create token depositing thread :[%s]", strerror(error));
 		exit(1);
 	}
-
+	gettimeofday(&startTime, NULL); 
+	printf("\nstarttime = %d\n", startTime); 
 	if((error = pthread_create(&serverThread, 0, server, NULL))){
             	fprintf(stderr, "\nlcan't create server thread :[%s]", strerror(error));
 		exit(1);
