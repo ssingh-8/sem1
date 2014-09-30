@@ -19,6 +19,7 @@ static char gszProgName[MAXPATHLENGTH];
 int g_PacketsCompleted = 0;
 int g_PacketsDropped = 0;
 int g_PacketsRemoved = 0;
+int g_PacketsCreated = 0;
 int g_TokensDropped = 0;
 int g_TokensInBucket = 0;
 int g_TokenNumber = 0;
@@ -169,8 +170,6 @@ double getTime(struct timeval start,struct timeval end){
 
 void parseLine(Packet *packet){
 
-	//INCOMPLETE
-
 	char *token;
 	int count = 0;
 	//char *ch = '\t';
@@ -205,10 +204,16 @@ void movePktFromQ1toQ2(){
 	
 	printf("%012.3fms: p%d leaves Q1, time in Q1 = %.3fms, token bucket now has %d tokens\n", packet->q1LeaveTime, packet->packetNo, packet->q1LeaveTime-packet->q1EnterTime, g_TokensInBucket);
 		
-	My402ListAppend(&q2, elem);
+	//elem = NULL;
+	//elem = (My402ListElem *)malloc(sizeof(My402ListElem));
+	//elem->obj = (void *)(packet);
+	My402ListAppend(&q2, (void *)(packet));
 	gettimeofday(&currentTime, NULL);
 	packet->q2EnterTime = getTime(startTime, currentTime);
 	printf("%012.3fms: p%d enters Q2\n", packet->q2EnterTime, packet->packetNo);
+
+	//packet = (Packet *)(elem->obj);
+	//printf("actual pktno = p%d enters Q2 : %.3fms\n",  ((Packet *)(elem->obj))->packetNo, packet->q1LeaveTime-packet->q1EnterTime);
 
 }
 
@@ -238,7 +243,8 @@ void *arrival(void *arg)
 			packet->serviceTime = 1000.0/params.mu;	
 		}
 		
-		packet->packetNo = ++i;
+		packet->packetNo = ++g_PacketsCreated;
+
 		//timeElapsed += packet->interArrivalTime;
 		gettimeofday(&currentTime, NULL);
 		//printf("\n currentTime sec = %d\t usec = %d\n",currentTime.tv_sec,currentTime.tv_usec);
@@ -255,7 +261,7 @@ void *arrival(void *arg)
 		
 		
 		//remove packet if tokens required is more than depth B
-		if(packet->tokensRequired > params.B) {
+		if((packet->tokensRequired) > (params.B)) {
 			printf("%012.3fms: p%d arrives, needs %d tokens, dropped\n", packet->arrivalTime, packet->packetNo, packet->tokensRequired);
                 g_PacketsDropped++;
 		}
@@ -265,14 +271,14 @@ void *arrival(void *arg)
             
 			pthread_mutex_lock(&m);
 
-			My402ListAppend(&q1, (void *)packet);
+			My402ListAppend(&q1, (void *)(packet));
 			gettimeofday(&currentTime, NULL);
 			packet->q1EnterTime = getTime(startTime, currentTime);
 			printf("%012.3fms: p%d enters Q1\n", packet->q1EnterTime, packet->packetNo); 
 	
 			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj); 
 			
-			if(headPacket->tokensRequired <= g_TokensInBucket) {
+			if((headPacket->tokensRequired) <= g_TokensInBucket) {
 				movePktFromQ1toQ2();
 				if(My402ListLength(&q2) == 1)
 					pthread_cond_broadcast(&cond);				
@@ -291,14 +297,15 @@ void *token(void *arg)
 	prevArrival = startTime;
 	leave = startTime;
 	
-	double tokenRate = 1000.0/params.r;
+	double tokenWaitTime = 1000.0/params.r;
 	while(1) {
-		
+
+		pthread_mutex_lock(&m);
 		
 		//timeElapsed += (1000.0/params.r) ;
-		pthread_mutex_lock(&m);
-		if(params.n <= 0 && My402ListEmpty(&q1)) {
-			fprintf(stderr, "No more Packets to process \n");
+
+		if(g_PacketsCreated == params.n && My402ListEmpty(&q1)) {
+			//fprintf(stderr, "No more Packets to process \n");
             		exit(1);
 		}
 		pthread_mutex_unlock(&m);
@@ -306,8 +313,8 @@ void *token(void *arg)
 		
 		gettimeofday(&currentTime, NULL);
 		//printf("\ngetTime(prevArrival,leave) = %f\n",getTime(prevArrival,leave));
-		if(tokenRate > getTime(prevArrival,leave))
-			usleep(1000*(tokenRate - getTime(prevArrival,leave)));
+		if(tokenWaitTime > getTime(prevArrival,leave))
+			usleep(1000*(tokenWaitTime - getTime(prevArrival,leave)));
 
 
 		pthread_mutex_lock(&m);
@@ -328,7 +335,7 @@ void *token(void *arg)
 		if(!My402ListEmpty(&q1)) {
 			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj); 
 			
-			if(headPacket->tokensRequired <= g_TokensInBucket) {
+			if((headPacket->tokensRequired) <= g_TokensInBucket) {
 				movePktFromQ1toQ2();
 				if(My402ListLength(&q2) == 1)
 					pthread_cond_broadcast(&cond);				
@@ -344,7 +351,40 @@ void *token(void *arg)
 
 void *server(void *arg)
 { 
-	
+	struct timeval currentTime, processTime;
+	//prevArrival = startTime;
+	while(1) {
+
+
+			pthread_mutex_lock(&m);
+			if(My402ListEmpty(&q2)){
+				pthread_cond_wait(&cond, &m);
+			}
+
+			gettimeofday(&processTime, NULL);
+
+			Packet *packet = (Packet *)(My402ListFirst(&q2)->obj);
+			gettimeofday(&currentTime, NULL);
+
+			My402ListUnlink(&q2, My402ListFirst(&q2));
+
+			packet->q2LeaveTime = getTime(startTime,currentTime);
+			printf("%012.3fms: p%d leaves Q2, time in Q2 = %.3fms\n", packet->q2LeaveTime, packet->packetNo, (packet->q2LeaveTime)-(packet->q2EnterTime));
+
+			gettimeofday(&currentTime, NULL);
+			packet->serviceStartTime = getTime(startTime,currentTime);
+			printf("%012.3fms: p%d begins service at S, requesting %.3fms of service\n", packet->serviceStartTime, packet->packetNo, packet->serviceTime);
+
+			gettimeofday(&currentTime, NULL);
+			if(packet->serviceTime > getTime(processTime,currentTime))
+				usleep(1000*(packet->serviceTime - getTime(processTime,currentTime)));
+
+			gettimeofday(&currentTime, NULL);
+			packet->serviceEndTime = getTime(startTime,currentTime);
+			printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
+
+			pthread_mutex_unlock(&m);
+	}
 	return NULL;
 }
 
