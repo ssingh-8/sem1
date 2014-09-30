@@ -236,7 +236,6 @@ void *arrival(void *arg)
 	
 	prevArrival = startTime;
 	leave = startTime;
-	//double timeElapsed = 0.0;
 	int i;
 	for(i = 0; i < params.n; i++){
 
@@ -257,18 +256,13 @@ void *arrival(void *arg)
 		
 		packet->packetNo = ++g_PacketsCreated;
 
-		//timeElapsed += packet->interArrivalTime;
 		gettimeofday(&currentTime, NULL);
-		//printf("\n currentTime sec = %d\t usec = %d\n",currentTime.tv_sec,currentTime.tv_usec);
-		//printf("\n packet->interArrivalTime = %012.3f\n",packet->interArrivalTime);
-		//printf("\n prevArrival = %d\n",prevArrival);
-		//printf("\n getTime(prevArrival,leave) = %f\n",getTime(prevArrival,leave));
+
 		if(packet->interArrivalTime > getTime(prevArrival,leave))
 			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
 		
 		gettimeofday(&currentTime, NULL);
 		packet->arrivalTime = getTime(startTime,currentTime);
-		//printf("\n currentTime = %d\n",currentTime);
 		prevArrival = currentTime;
 		
 		
@@ -313,18 +307,15 @@ void *token(void *arg)
 	while(1) {
 
 		pthread_mutex_lock(&m);
-		
-		//timeElapsed += (1000.0/params.r) ;
 
 		if(g_PacketsCreated == params.n && My402ListEmpty(&q1)) {
 			//fprintf(stderr, "No more Packets to process \n");
-            		pthread_exit(1);
+            		pthread_exit(0);
 		}
 		pthread_mutex_unlock(&m);
 
 		
 		gettimeofday(&currentTime, NULL);
-		//printf("\ngetTime(prevArrival,leave) = %f\n",getTime(prevArrival,leave));
 		if(tokenWaitTime > getTime(prevArrival,leave))
 			usleep(1000*(tokenWaitTime - getTime(prevArrival,leave)));
 
@@ -368,9 +359,14 @@ void *server(void *arg)
 	while(1) {
 
 
-			pthread_mutex_lock(&m);
+			pthread_mutex_trylock(&m);
 			if(My402ListEmpty(&q2)){
 				pthread_cond_wait(&cond, &m);
+			}
+
+			if(My402ListEmpty(&q2)){
+				pthread_mutex_unlock(&m);
+				break;
 			}
 			pthread_mutex_unlock(&m);
 			gettimeofday(&processTime, NULL);
@@ -407,6 +403,14 @@ void *server(void *arg)
 	return NULL;
 }
 
+void displayStatistics(){
+
+	printf("\nStatistics:\n");
+
+
+
+}
+
 int main(int argc, char *argv[])
 {
 	
@@ -430,7 +434,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Invalid Number of Packets <%s>\n", fileBuf);
             		exit(1);
 		}     
-    	}
+    }
 
 	int error;
 	sigemptyset(&set);
@@ -438,9 +442,6 @@ int main(int argc, char *argv[])
 	error = pthread_sigmask(SIG_BLOCK,&set,NULL);
 
 	gettimeofday(&startTime, NULL); 
-	//printf("\nstarttime = %d\n", startTime); 
-    	//printf("%d microseconds\n", startTime.tv_usec); 
-
 	printf("%012.3fms: emulation begins\n",getTime(startTime,startTime));
 
 	if(error != 0){
@@ -467,6 +468,11 @@ int main(int argc, char *argv[])
 	pthread_join(tokenThread,0);
 	pthread_join(serverThread,0);
 
+	struct timeval currentTime;
+	gettimeofday(&currentTime, NULL);
+	printf("%012.3fms: emulation ends\n",getTime(startTime,currentTime));
+
+	displayStatistics();
     	//pause();
     	//sleep(1);
 	return 0;

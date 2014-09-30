@@ -38,6 +38,7 @@ static void Usage();
 void ProcessOptions(int argc, char *argv[]);
 void setDefaultParameters();
 void printEmulationParameters();
+void displayStatistics();
 Packet *createPacket();
 
 void *arrival(void *);
