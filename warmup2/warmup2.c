@@ -310,6 +310,7 @@ void *token(void *arg)
 
 		if(g_PacketsCreated == params.n && My402ListEmpty(&q1)) {
 			//fprintf(stderr, "No more Packets to process \n");
+			pthread_mutex_unlock(&m);
             		pthread_exit(0);
 		}
 		pthread_mutex_unlock(&m);
@@ -360,11 +361,11 @@ void *server(void *arg)
 
 
 			pthread_mutex_trylock(&m);
-			if(My402ListEmpty(&q2)){
+			if(My402ListEmpty(&q2) && g_PacketsCreated < params.n){
 				pthread_cond_wait(&cond, &m);
 			}
 
-			if(My402ListEmpty(&q2)){
+			if(My402ListEmpty(&q2) && My402ListEmpty(&q1) && g_PacketsCreated==params.n){
 				pthread_mutex_unlock(&m);
 				break;
 			}
@@ -418,7 +419,7 @@ int main(int argc, char *argv[])
 	setDefaultParameters();
 	ProcessOptions(argc, argv);
 
-	printEmulationParameters();
+
 	My402ListInit(&q1);
 	My402ListInit(&q2);
 
@@ -436,6 +437,7 @@ int main(int argc, char *argv[])
 		}     
     }
 
+	printEmulationParameters();
 	int error;
 	sigemptyset(&set);
 	sigaddset(&set,SIGINT);
