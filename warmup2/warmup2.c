@@ -241,11 +241,15 @@ void *arrival(void *arg)
 		packet->packetNo = ++i;
 		//timeElapsed += packet->interArrivalTime;
 		gettimeofday(&currentTime, NULL);
+		printf("\n packet->interArrivalTime = %012.3f\n",packet->interArrivalTime);
+		printf("\n prevArrival = %012.3f\n",prevArrival);
+		printf("\n leave = %012.3f\n",leave);
 		if(packet->interArrivalTime > getTime(prevArrival,leave))
 			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
 		
 		gettimeofday(&currentTime, NULL);
 		packet->arrivalTime = getTime(startTime,currentTime);
+		printf("\n currentTime = %012.3f\n",currentTime);
 		prevArrival = currentTime;
 		
 		
