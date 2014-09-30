@@ -56,7 +56,7 @@ void setDefaultParameters(){
 	params.mu = 0.35;
 	params.B = 10;
 	params.P = 3;
-	params.n = 20;
+	params.n = 4;
 	params.fileName = NULL;
 }
 
@@ -360,14 +360,15 @@ void *server(void *arg)
 	while(1) {
 
 
-			pthread_mutex_trylock(&m);
+			pthread_mutex_lock(&m);
 			if(My402ListEmpty(&q2) && g_PacketsCreated < params.n){
 				pthread_cond_wait(&cond, &m);
 			}
 
 			if(My402ListEmpty(&q2) && My402ListEmpty(&q1) && g_PacketsCreated==params.n){
 				pthread_mutex_unlock(&m);
-				break;
+				pthread_exit(1);
+				//break;
 			}
 			pthread_mutex_unlock(&m);
 			gettimeofday(&processTime, NULL);
