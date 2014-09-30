@@ -241,16 +241,16 @@ void *arrival(void *arg)
 		packet->packetNo = ++i;
 		//timeElapsed += packet->interArrivalTime;
 		gettimeofday(&currentTime, NULL);
-		printf("\n currentTime sec = %d\t usec = %d\n",currentTime.tv_sec,currentTime.tv_usec);
-		printf("\n packet->interArrivalTime = %012.3f\n",packet->interArrivalTime);
-		printf("\n prevArrival = %d\n",prevArrival);
-		printf("\n leave = %d\n",leave);
+		//printf("\n currentTime sec = %d\t usec = %d\n",currentTime.tv_sec,currentTime.tv_usec);
+		//printf("\n packet->interArrivalTime = %012.3f\n",packet->interArrivalTime);
+		//printf("\n prevArrival = %d\n",prevArrival);
+		printf("\n getTime(prevArrival,leave) = %f\n",getTime(prevArrival,leave));
 		if(packet->interArrivalTime > getTime(prevArrival,leave))
 			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
 		
 		gettimeofday(&currentTime, NULL);
 		packet->arrivalTime = getTime(startTime,currentTime);
-		printf("\n currentTime = %d\n",currentTime);
+		//printf("\n currentTime = %d\n",currentTime);
 		prevArrival = currentTime;
 		
 		
