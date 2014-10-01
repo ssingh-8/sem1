@@ -307,6 +307,18 @@ void *token(void *arg)
 	while(1) {
 
 		pthread_mutex_lock(&m);
+				if(!My402ListEmpty(&q1)) {
+					Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj);
+
+					if((headPacket->tokensRequired) <= g_TokensInBucket) {
+						movePktFromQ1toQ2();
+						if(My402ListLength(&q2) == 1)
+							pthread_cond_broadcast(&cond);
+					}
+				}
+		pthread_mutex_unlock(&m);
+
+		pthread_mutex_lock(&m);
 
 		if(g_PacketsCreated == params.n && My402ListEmpty(&q1)) {
 			//fprintf(stderr, "No more Packets to process \n");
@@ -320,13 +332,14 @@ void *token(void *arg)
 		if(tokenWaitTime > getTime(prevArrival,leave))
 			usleep(1000*(tokenWaitTime - getTime(prevArrival,leave)));
 
+		gettimeofday(&currentTime, NULL);
+		prevArrival = currentTime;
 
 		pthread_mutex_lock(&m);
 		g_TokenNumber++;
 		pthread_mutex_unlock(&m);
 
-		gettimeofday(&currentTime, NULL);
-		prevArrival = currentTime;
+
 
 		pthread_mutex_lock(&m);
 		if(g_TokensInBucket >= params.B) {
@@ -337,18 +350,10 @@ void *token(void *arg)
 			g_TokensInBucket++;
 			printf("%012.3fms: token t%d arrives, token bucket now has %d tokens\n", getTime(startTime,currentTime), g_TokenNumber, g_TokensInBucket);
 		}
-		
-		if(!My402ListEmpty(&q1)) {
-			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj); 
-			
-			if((headPacket->tokensRequired) <= g_TokensInBucket) {
-				movePktFromQ1toQ2();
-				if(My402ListLength(&q2) == 1)
-					pthread_cond_broadcast(&cond);				
-			}
-		}
 		pthread_mutex_unlock(&m);
-			
+
+
+
 		gettimeofday(&leave, NULL); 	
 	}
 	
