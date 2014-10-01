@@ -49,6 +49,16 @@ int traceDriven = 0;
 
 struct timeval startTime;
 
+double g_AvgPacketInterArrivalTime = 0.0;
+double g_AvgPacketServiceTime = 0.0;
+double g_AvgPacketsInQ1 = 0.0;
+double g_AvgPacketsInQ2 = 0.0;
+double g_AvgPacketsInS = 0.0;
+double g_AvgTimePacketInSystem = 0.0;
+double g_StandardDeviation = 0.0;
+double g_TokenDropProbability = 0.0;
+double g_PacketDropProbability = 0.0;
+
 void setDefaultParameters(){
 	
 	params.lambda = 0.5;
@@ -216,16 +226,10 @@ void movePktFromQ1toQ2(){
 	
 	printf("%012.3fms: p%d leaves Q1, time in Q1 = %.3fms, token bucket now has %d tokens\n", packet->q1LeaveTime, packet->packetNo, packet->q1LeaveTime-packet->q1EnterTime, g_TokensInBucket);
 		
-	//elem = NULL;
-	//elem = (My402ListElem *)malloc(sizeof(My402ListElem));
-	//elem->obj = (void *)(packet);
 	My402ListAppend(&q2, (void *)(packet));
 	gettimeofday(&currentTime, NULL);
 	packet->q2EnterTime = getTime(startTime, currentTime);
 	printf("%012.3fms: p%d enters Q2\n", packet->q2EnterTime, packet->packetNo);
-
-	//packet = (Packet *)(elem->obj);
-	//printf("actual pktno = p%d enters Q2 : %.3fms\n",  ((Packet *)(elem->obj))->packetNo, packet->q1LeaveTime-packet->q1EnterTime);
 
 }
 
@@ -254,7 +258,7 @@ void *arrival(void *arg)
 			packet->serviceTime = 1000.0/params.mu;	
 		}
 		
-		packet->packetNo = ++g_PacketsCreated;
+		packet->packetNo = g_PacketsCreated + 1;
 
 		gettimeofday(&currentTime, NULL);
 
@@ -270,13 +274,16 @@ void *arrival(void *arg)
 		if((packet->tokensRequired) > (params.B)) {
 			printf("%012.3fms: p%d arrives, needs %d tokens, dropped\n", packet->arrivalTime, packet->packetNo, packet->tokensRequired);
                 g_PacketsDropped++;
+                pthread_mutex_lock(&m);
+                g_PacketsCreated++;
+                pthread_mutex_unlock(&m);
 		}
 
 		else {
 			printf ("%012.3fms: p%d arrives, needs %d tokens, inter-arrival time = %.3fms\n", packet->arrivalTime, packet->packetNo, packet->tokensRequired, packet->interArrivalTime);
             
 			pthread_mutex_lock(&m);
-
+			g_PacketsCreated++;
 			My402ListAppend(&q1, (void *)(packet));
 			gettimeofday(&currentTime, NULL);
 			packet->q1EnterTime = getTime(startTime, currentTime);
@@ -307,15 +314,15 @@ void *token(void *arg)
 	while(1) {
 
 		pthread_mutex_lock(&m);
-				if(!My402ListEmpty(&q1)) {
-					Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj);
+		if(!My402ListEmpty(&q1)) {
+			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj);
 
-					if((headPacket->tokensRequired) <= g_TokensInBucket) {
-						movePktFromQ1toQ2();
-						if(My402ListLength(&q2) == 1)
-							pthread_cond_broadcast(&cond);
-					}
-				}
+			if((headPacket->tokensRequired) <= g_TokensInBucket) {
+				movePktFromQ1toQ2();
+				if(My402ListLength(&q2) == 1)
+					pthread_cond_broadcast(&cond);
+			}
+		}
 		pthread_mutex_unlock(&m);
 
 		pthread_mutex_lock(&m);
@@ -339,8 +346,6 @@ void *token(void *arg)
 		g_TokenNumber++;
 		pthread_mutex_unlock(&m);
 
-
-
 		pthread_mutex_lock(&m);
 		if(g_TokensInBucket >= params.B) {
 			printf("%012.3fms: token t%d arrives, dropped\n", getTime(startTime,currentTime), g_TokenNumber); 
@@ -351,8 +356,6 @@ void *token(void *arg)
 			printf("%012.3fms: token t%d arrives, token bucket now has %d tokens\n", getTime(startTime,currentTime), g_TokenNumber, g_TokensInBucket);
 		}
 		pthread_mutex_unlock(&m);
-
-
 
 		gettimeofday(&leave, NULL); 	
 	}
@@ -365,7 +368,6 @@ void *server(void *arg)
 	struct timeval currentTime, processTime;
 	//prevArrival = startTime;
 	while(1) {
-
 
 			pthread_mutex_lock(&m);
 			if(My402ListEmpty(&q2) && My402ListEmpty(&q1) && g_PacketsCreated==params.n){
@@ -387,7 +389,7 @@ void *server(void *arg)
 			Packet *packet = (Packet *)(My402ListFirst(&q2)->obj);
 			gettimeofday(&currentTime, NULL);
 
-			My402ListUnlink(&q2, My402ListFirst(&q2));
+			//My402ListUnlink(&q2, My402ListFirst(&q2));
 			pthread_mutex_unlock(&m);
 
 			packet->q2LeaveTime = getTime(startTime,currentTime);
@@ -405,9 +407,20 @@ void *server(void *arg)
 			packet->serviceEndTime = getTime(startTime,currentTime);
 			printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
 
+			g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
+			g_AvgPacketsInQ2 += (double)(packet->q2LeaveTime-packet->q2EnterTime);
+			g_AvgPacketsInS += (double)(packet->serviceEndTime - packet->serviceStartTime);
+
+			g_AvgTimePacketInSystem += (double)(packet->serviceEndTime - packet->arrivalTime);
+
 			g_PacketsCompleted++;
-			}
+
+			pthread_mutex_lock(&m);
+			My402ListUnlink(&q2, My402ListFirst(&q2));
 			pthread_mutex_unlock(&m);
+			}
+			else
+				pthread_mutex_unlock(&m);
 			/*pthread_mutex_lock(&m);
 			if(My402ListEmpty(&q1) && g_PacketsCreated==params.n)
 				pthread_exit(1);
@@ -418,9 +431,25 @@ void *server(void *arg)
 
 void displayStatistics(){
 
-	printf("\nStatistics:\n");
+	struct timeval currentTime;
+	gettimeofday(&currentTime, NULL);
 
+	printf("%012.3fms: emulation ends\n",getTime(startTime,currentTime));
 
+	printf("\nStatistics:\n\n");
+
+	printf("\taverage packet inter-arrival time = \n");
+	printf("\taverage packet service time = \n\n");
+
+	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
+	printf("\taverage number of packets in Q2 = \n");
+	printf("\taverage number of packets at S = \n\n");
+
+	printf("\taverage time a packet spent in system = \n");
+	printf("\tstandard deviation for time spent in system = \n\n");
+
+	printf("\ttoken drop probability = \n");
+	printf("\tpacket drop probability = \n\n");
 
 }
 
@@ -481,10 +510,6 @@ int main(int argc, char *argv[])
 	pthread_join(arrivalThread,0);
 	pthread_join(tokenThread,0);
 	pthread_join(serverThread,0);
-
-	struct timeval currentTime;
-	gettimeofday(&currentTime, NULL);
-	printf("%012.3fms: emulation ends\n",getTime(startTime,currentTime));
 
 	displayStatistics();
     	//pause();
