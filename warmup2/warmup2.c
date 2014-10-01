@@ -60,7 +60,7 @@ void setDefaultParameters(){
 	params.mu = 0.35;
 	params.B = 10;
 	params.P = 3;
-	params.n = 4;
+	params.n = 20;
 	params.fileName = NULL;
 }
 
@@ -265,6 +265,7 @@ void *arrival(void *arg)
 		prevArrival = currentTime;
 		
 		g_AvgPacketInterArrivalTime += packet->interArrivalTime;
+		g_AvgPacketServiceTime += packet->serviceTime;
 		
 		//remove packet if tokens required is more than depth B
 		if((packet->tokensRequired) > (params.B)) {
@@ -457,14 +458,14 @@ void displayStatistics(){
 
 	printf("\nStatistics:\n\n");
 
-	printf("\taverage packet inter-arrival time = %.6f\n",(double)(g_AvgPacketInterArrivalTime/(getTime(startTime,currentTime))));
-	printf("\taverage packet service time = \n\n");
+	printf("\taverage packet inter-arrival time = %.6f\n", (double)(g_AvgPacketInterArrivalTime/(getTime(startTime,currentTime))));
+	printf("\taverage packet service time = %.6f\n\n", (double)(g_AvgPacketServiceTime/(getTime(startTime,currentTime))));
 
-	printf("\taverage number of packets in Q1 = %.6g\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
-	printf("\taverage number of packets in Q2 = %.6g\n", (double)(g_AvgPacketsInQ2/(getTime(startTime,currentTime))));
-	printf("\taverage number of packets at S = %.6g\n\n", (double)(g_AvgPacketsInS/(getTime(startTime,currentTime))));
+	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
+	printf("\taverage number of packets in Q2 = %.6f\n", (double)(g_AvgPacketsInQ2/(getTime(startTime,currentTime))));
+	printf("\taverage number of packets at S = %.6f\n\n", (double)(g_AvgPacketsInS/(getTime(startTime,currentTime))));
 
-	printf("\taverage time a packet spent in system = %.6g\n", (double)(g_AvgTimePacketInSystem/(getTime(startTime,currentTime))));
+	printf("\taverage time a packet spent in system = %.6f\n", (double)(g_AvgTimePacketInSystem/(getTime(startTime,currentTime))));
 	printf("\tstandard deviation for time spent in system = \n\n");
 
 	printf("\ttoken drop probability = %.6f\n", (double)(g_TokensDropped)/(double)(g_TokenNumber));
