@@ -288,9 +288,7 @@ void *arrival(void *arg)
 			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj);
 			
 			if((headPacket->tokensRequired) <= g_TokensInBucket) {
-				pthread_mutex_unlock(&m);
 				movePktFromQ1toQ2();
-				pthread_mutex_lock(&m);
 				if(My402ListLength(&q2) == 1)
 					pthread_cond_broadcast(&cond);				
 			}
@@ -436,7 +434,7 @@ void displayStatistics(){
 
 	printf("\nStatistics:\n\n");
 
-	printf("\taverage packet inter-arrival time = \n");
+	printf("\taverage packet inter-arrival time = %.6f\n",(double)(g_AvgPacketInterArrivalTime/(getTime(startTime,currentTime))));
 	printf("\taverage packet service time = \n\n");
 
 	printf("\taverage number of packets in Q1 = %.6g\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
