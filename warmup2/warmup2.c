@@ -230,7 +230,7 @@ void movePktFromQ1toQ2(){
 
 void sigsubhandler(int sig)
 {
-	printf("Caught signal:%d\n",sig);
+	//printf("Caught signal:%d\n",sig);
 	if (pthread_mutex_trylock(&m)==0)
 		pthread_mutex_unlock(&m);
 	pthread_exit(0);
@@ -462,19 +462,27 @@ int gSighandlerDone = 0;
 void clearQueues(){
 
 	struct timeval currentTime;
-	//Q1
-	//pthread_mutex_lock(&m);
-	printf("Clear Queues\n\n");
+
+	//printf("Clear Queues\n\n");
 	while(!My402ListEmpty(&q1)) {
 
 	Packet *packet = (Packet *)(My402ListFirst(&q1)->obj);
 	gettimeofday(&currentTime, NULL);
 
-	printf("%012.3fms: p%d leaves Q1", getTime(startTime,currentTime), packet->packetNo);
-	//My402ListUnlink(&q1, My402ListFirst(&q1));
-	//pthread_mutex_unlock(&m);
+	printf("%012.3fms: p%d leaves Q1\n", getTime(startTime,currentTime), packet->packetNo);
 	My402ListUnlink(&q1, My402ListFirst(&q1));
 	}
+
+	while(!My402ListEmpty(&q2)) {
+
+		Packet *packet = (Packet *)(My402ListFirst(&q2)->obj);
+		gettimeofday(&currentTime, NULL);
+
+		printf("%012.3fms: p%d leaves Q2\n", getTime(startTime,currentTime), packet->packetNo);
+		My402ListUnlink(&q2, My402ListFirst(&q2));
+	}
+
+
 	return;
 }
 void *sighandler (void *arg)
@@ -490,20 +498,14 @@ void *sighandler (void *arg)
 		   printf("Error receiving signal %d", s);
 		   exit(0);
 	   }
-	   printf("Murder1!!!!!\n\n");
 	   pthread_kill (arrivalThread, SIGUSR1);
-	   printf("Murder123!!!!!\n\n");
 	   pthread_kill (tokenThread, SIGUSR1);
-	   /*Free data structures*/
-	   /*Check if packet is being processed currently*/
 
-	   printf("Murder2!!!!!\n\n");
 	   pthread_cancel (serverThread);
-	   printf("Murder3!!!!!\n\n");
 	   pthread_join(serverThread, 0);
-	   printf("Murder4!!!!!\n\n");
 	   break;
 	}
+	return NULL;
 }
 
 void displayStatistics(){
@@ -523,7 +525,7 @@ void displayStatistics(){
 	if(g_PacketsCompleted != 0)
 		printf("\taverage packet service time = %.6f seconds\n\n", (double)(g_AvgPacketServiceTime/(double)(g_PacketsCompleted)/1000.0));
 	else
-		printf("\taverage packet service time = N/A (no packet arrived at server)\n");
+		printf("\taverage packet service time = N/A (no packet arrived at server)\n\n");
 
 	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
 	printf("\taverage number of packets in Q2 = %.6f\n", (double)(g_AvgPacketsInQ2/(getTime(startTime,currentTime))));
@@ -535,7 +537,7 @@ void displayStatistics(){
 		printf("\taverage time a packet spent in system = N/A (no packet arrived at server)\n");
 
 	if(g_PacketsCompleted != 0){
-		g_StandardDeviation = sqrt((g_AvgTimePacketInSystem_Square/g_PacketsCompleted/1000.0)-((g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)*(g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)));
+		g_StandardDeviation = sqrt((g_AvgTimePacketInSystem_Square/g_PacketsCompleted/1000000.0)-((g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)*(g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)));
 		printf("\tstandard deviation for time spent in system = %.6f seconds\n\n", g_StandardDeviation);
 	}
 	else
