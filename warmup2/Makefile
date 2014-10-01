@@ -1,5 +1,5 @@
 warmup2: warmup2.o my402list.o
-	gcc -o warmup2 -g warmup2.o my402list.o -lpthread
+	gcc -o warmup2 -g warmup2.o my402list.o -lpthread -lm
 
 warmup2.o: warmup2.c my402list.h
 	gcc -g -c -Wall -lpthread warmup2.c

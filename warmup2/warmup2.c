@@ -49,6 +49,7 @@ double g_AvgPacketsInQ1 = 0.0;
 double g_AvgPacketsInQ2 = 0.0;
 double g_AvgPacketsInS = 0.0;
 double g_AvgTimePacketInSystem = 0.0;
+double g_AvgTimePacketInSystem_Square = 0.0;
 double g_StandardDeviation = 0.0;
 double g_TokenDropProbability = 0.0;
 double g_PacketDropProbability = 0.0;
@@ -413,7 +414,7 @@ void *server(void *arg)
 			g_AvgPacketsInS += (double)(packet->serviceEndTime - packet->serviceStartTime);
 
 			g_AvgTimePacketInSystem += (double)(packet->serviceEndTime - packet->arrivalTime);
-
+			g_AvgTimePacketInSystem_Square += ((packet->serviceEndTime - packet->arrivalTime))*((packet->serviceEndTime - packet->arrivalTime));
 			g_PacketsCompleted++;
 
 			pthread_mutex_lock(&m);
@@ -480,7 +481,12 @@ void displayStatistics(){
 	else
 		printf("\taverage time a packet spent in system = N/A (no packet arrived at server)\n");
 
-	printf("\tstandard deviation for time spent in system = \n\n");
+	if(g_PacketsCompleted != 0){
+		g_StandardDeviation = sqrt((g_AvgTimePacketInSystem_Square/g_PacketsCompleted/1000.0)-((g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)*(g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)));
+		printf("\tstandard deviation for time spent in system = %.6f seconds\n\n", g_StandardDeviation);
+	}
+	else
+		printf("\tstandard deviation for time spent in system = N/A (no packet arrived at server)\n\n");
 
 	if(g_TokenNumber != 0)
 		printf("\ttoken drop probability = %.6f\n", (double)(g_TokensDropped)/(double)(g_TokenNumber));
@@ -507,16 +513,16 @@ int main(int argc, char *argv[])
 
 	if(traceDriven){
 		if ((fp = fopen(params.fileName, "r")) == NULL) {
-            		fprintf(stderr, "Could not open the file <%s>\n", params.fileName);
-            		exit(1);
-        	}
+           	fprintf(stderr, "Could not open the file <%s>\n", params.fileName);
+           	exit(1);
+        }
         
-        	fgets(fileBuf, 1026, fp); 
-        	params.n = atoi(fileBuf);  
-		if(params.n < 0 || params.n > 2147483647) {
-			fprintf(stderr, "Invalid Number of Packets <%s>\n", fileBuf);
-            		exit(1);
-		}     
+        fgets(fileBuf, 1026, fp);
+        params.n = atoi(fileBuf);
+        if(params.n < 0 || params.n > 2147483647) {
+		fprintf(stderr, "Invalid Number of Packets <%s>\n", fileBuf);
+           	exit(1);
+        }
     }
 
 	printEmulationParameters();
@@ -525,29 +531,28 @@ int main(int argc, char *argv[])
 	sigaddset(&set,SIGINT);
 	error = pthread_sigmask(SIG_BLOCK,&set,NULL);
 
-	gettimeofday(&startTime, NULL); 
-	printf("%012.3fms: emulation begins\n",getTime(startTime,startTime));
-
 	if(error != 0){
 		fprintf(stderr, "\ncan't create mask :[%s]", strerror(error));
 		exit(1);
 	}
 
+	gettimeofday(&startTime, NULL);
+	printf("%012.3fms: emulation begins\n",getTime(startTime,startTime));
 
 	if((error = pthread_create(&arrivalThread, 0, arrival, NULL))){
-        	fprintf(stderr, "\ncan't create arrival thread :[%s]", strerror(error));
+       	fprintf(stderr, "\ncan't create arrival thread :[%s]", strerror(error));
 		exit(1);
 	}
 	if((error = pthread_create(&tokenThread, 0, token, NULL))){
-            	fprintf(stderr, "\ncan't create token depositing thread :[%s]", strerror(error));
+      	fprintf(stderr, "\ncan't create token depositing thread :[%s]", strerror(error));
 		exit(1);
 	}
 	if((error = pthread_create(&serverThread, 0, server, NULL))){
-            	fprintf(stderr, "\nlcan't create server thread :[%s]", strerror(error));
+       	fprintf(stderr, "\ncan't create server thread :[%s]", strerror(error));
 		exit(1);
 	}
 	if((error = pthread_create(&sigThread, 0, sighandler, (void *)&set))){
-	            	fprintf(stderr, "\nlcan't create Signal thread :[%s]", strerror(error));
+        fprintf(stderr, "\ncan't create Signal thread :[%s]", strerror(error));
 		exit(1);
 	}
 	
