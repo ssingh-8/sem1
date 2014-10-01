@@ -92,6 +92,10 @@ void My402ListUnlink(My402List* pList, My402ListElem* elem){
 	elem->prev = NULL;
 	free(elem);
 	pList->num_members = pList->num_members - 1;
+	if(pList->num_members == 0){
+		pList->anchor.next = NULL;
+		pList->anchor.prev = NULL;
+	}
 }
 
 void My402ListUnlinkAll(My402List* pList){

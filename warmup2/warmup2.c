@@ -291,7 +291,7 @@ void *arrival(void *arg)
 			}
 			pthread_mutex_unlock(&m);
 		
-		}	
+		}
 		gettimeofday(&leave, NULL); 	
 	}
 	return NULL;
@@ -323,10 +323,12 @@ void *token(void *arg)
 
 		pthread_mutex_lock(&m);
 		g_TokenNumber++;
+		pthread_mutex_unlock(&m);
 
 		gettimeofday(&currentTime, NULL);
 		prevArrival = currentTime;
 
+		pthread_mutex_lock(&m);
 		if(g_TokensInBucket >= params.B) {
 			printf("%012.3fms: token t%d arrives, dropped\n", getTime(startTime,currentTime), g_TokenNumber); 
 			g_TokensDropped++;
@@ -361,19 +363,22 @@ void *server(void *arg)
 
 
 			pthread_mutex_lock(&m);
-			if(My402ListEmpty(&q2) && g_PacketsCreated < params.n){
-				pthread_cond_wait(&cond, &m);
-			}
-
 			if(My402ListEmpty(&q2) && My402ListEmpty(&q1) && g_PacketsCreated==params.n){
 				pthread_mutex_unlock(&m);
 				pthread_exit(1);
 				//break;
 			}
+
+			if(My402ListEmpty(&q2) && !My402ListEmpty(&q1) && g_PacketsCreated <= params.n){
+				pthread_cond_wait(&cond, &m);
+			}
+
 			pthread_mutex_unlock(&m);
 			gettimeofday(&processTime, NULL);
 
 			pthread_mutex_lock(&m);
+			if(!My402ListEmpty(&q2)) {
+
 			Packet *packet = (Packet *)(My402ListFirst(&q2)->obj);
 			gettimeofday(&currentTime, NULL);
 
@@ -396,7 +401,8 @@ void *server(void *arg)
 			printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
 
 			g_PacketsCompleted++;
-
+			}
+			pthread_mutex_unlock(&m);
 			/*pthread_mutex_lock(&m);
 			if(My402ListEmpty(&q1) && g_PacketsCreated==params.n)
 				pthread_exit(1);
