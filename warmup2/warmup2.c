@@ -459,18 +459,36 @@ void displayStatistics(){
 
 	printf("\nStatistics:\n\n");
 
-	printf("\taverage packet inter-arrival time = %.6f\n", 1000.0*(double)(g_AvgPacketInterArrivalTime/(double)(g_TotalPackets)));
-	printf("\taverage packet service time = %.6f\n\n", 1000.0*(double)(g_AvgPacketServiceTime/(double)(g_PacketsCompleted)));
+	if(g_TotalPackets != 0)
+		printf("\taverage packet inter-arrival time = %.6f seconds\n", (double)(g_AvgPacketInterArrivalTime/(double)(g_TotalPackets)/1000.0));
+	else
+		printf("\taverage packet inter-arrival time = N/A (no packet arrived at this facility)\n");
+
+	if(g_PacketsCompleted != 0)
+		printf("\taverage packet service time = %.6f seconds\n\n", (double)(g_AvgPacketServiceTime/(double)(g_PacketsCompleted)/1000.0));
+	else
+		printf("\taverage packet service time = N/A (no packet arrived at server)\n");
 
 	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
 	printf("\taverage number of packets in Q2 = %.6f\n", (double)(g_AvgPacketsInQ2/(getTime(startTime,currentTime))));
 	printf("\taverage number of packets at S = %.6f\n\n", (double)(g_AvgPacketsInS/(getTime(startTime,currentTime))));
 
-	printf("\taverage time a packet spent in system = %.6f\n", (double)(g_AvgTimePacketInSystem/(getTime(startTime,currentTime))));
+	if(g_PacketsCompleted != 0)
+		printf("\taverage time a packet spent in system = %.6f seconds\n", (double)(g_AvgTimePacketInSystem/(double)(g_PacketsCompleted)/1000.0));
+	else
+		printf("\taverage time a packet spent in system = N/A (no packet arrived at server)\n");
+
 	printf("\tstandard deviation for time spent in system = \n\n");
 
-	printf("\ttoken drop probability = %.6f\n", (double)(g_TokensDropped)/(double)(g_TokenNumber));
-	printf("\tpacket drop probability = %.6f\n\n", (double)(g_PacketsDropped)/(double)(g_TotalPackets));
+	if(g_TokenNumber != 0)
+		printf("\ttoken drop probability = %.6f\n", (double)(g_TokensDropped)/(double)(g_TokenNumber));
+	else
+		printf("\ttoken drop probability = N/A (no tokens arrived at token bucket filter)\n");
+
+	if(g_TotalPackets != 0)
+		printf("\tpacket drop probability = %.6f\n\n", (double)(g_PacketsDropped)/(double)(g_TotalPackets));
+	else
+		printf("\tpacket drop probability = N/A (no packet arrived at this facility)\n");
 
 }
 
