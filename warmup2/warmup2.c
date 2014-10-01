@@ -19,17 +19,10 @@ static char gszProgName[MAXPATHLENGTH];
 int g_PacketsCompleted = 0;
 int g_PacketsDropped = 0;
 int g_PacketsRemoved = 0;
-int g_PacketsCreated = 0;
+int g_TotalPackets = 0;
 int g_TokensDropped = 0;
 int g_TokensInBucket = 0;
 int g_TokenNumber = 0;
-double g_TotalInterArrivalTime = 0.0;
-double g_TotalServiceTime = 0.0;
-double g_TimeSpentQ1 = 0.0;
-double g_TimeSpentQ2 = 0.0;
-double g_TimeSpentS = 0.0;
-double g_TotalTimeSpentSystem = 0.0;
-
 
 pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER; 
@@ -219,14 +212,21 @@ void movePktFromQ1toQ2(){
 	Packet *packet = (Packet *)(elem->obj);			
 	
 	g_TokensInBucket -= packet->tokensRequired;
+	pthread_mutex_lock(&m);
 	My402ListUnlink(&q1, elem);	
+	pthread_mutex_unlock(&m);
 	
 	gettimeofday(&currentTime, NULL);
 	packet->q1LeaveTime = getTime(startTime, currentTime);
 	
 	printf("%012.3fms: p%d leaves Q1, time in Q1 = %.3fms, token bucket now has %d tokens\n", packet->q1LeaveTime, packet->packetNo, packet->q1LeaveTime-packet->q1EnterTime, g_TokensInBucket);
 		
+	g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
+
+	pthread_mutex_lock(&m);
 	My402ListAppend(&q2, (void *)(packet));
+	pthread_mutex_unlock(&m);
+
 	gettimeofday(&currentTime, NULL);
 	packet->q2EnterTime = getTime(startTime, currentTime);
 	printf("%012.3fms: p%d enters Q2\n", packet->q2EnterTime, packet->packetNo);
@@ -258,7 +258,7 @@ void *arrival(void *arg)
 			packet->serviceTime = 1000.0/params.mu;	
 		}
 		
-		packet->packetNo = g_PacketsCreated + 1;
+		packet->packetNo = g_TotalPackets + 1;
 
 		gettimeofday(&currentTime, NULL);
 
@@ -269,13 +269,14 @@ void *arrival(void *arg)
 		packet->arrivalTime = getTime(startTime,currentTime);
 		prevArrival = currentTime;
 		
+		g_AvgPacketInterArrivalTime += packet->interArrivalTime;
 		
 		//remove packet if tokens required is more than depth B
 		if((packet->tokensRequired) > (params.B)) {
 			printf("%012.3fms: p%d arrives, needs %d tokens, dropped\n", packet->arrivalTime, packet->packetNo, packet->tokensRequired);
                 g_PacketsDropped++;
                 pthread_mutex_lock(&m);
-                g_PacketsCreated++;
+                g_TotalPackets++;
                 pthread_mutex_unlock(&m);
 		}
 
@@ -283,21 +284,27 @@ void *arrival(void *arg)
 			printf ("%012.3fms: p%d arrives, needs %d tokens, inter-arrival time = %.3fms\n", packet->arrivalTime, packet->packetNo, packet->tokensRequired, packet->interArrivalTime);
             
 			pthread_mutex_lock(&m);
-			g_PacketsCreated++;
+			g_TotalPackets++;
 			My402ListAppend(&q1, (void *)(packet));
+			pthread_mutex_unlock(&m);
+
 			gettimeofday(&currentTime, NULL);
 			packet->q1EnterTime = getTime(startTime, currentTime);
 			printf("%012.3fms: p%d enters Q1\n", packet->q1EnterTime, packet->packetNo); 
 	
-			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj); 
+			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj);
 			
+			pthread_mutex_lock(&m);
 			if((headPacket->tokensRequired) <= g_TokensInBucket) {
+				pthread_mutex_unlock(&m);
 				movePktFromQ1toQ2();
+				pthread_mutex_lock(&m);
 				if(My402ListLength(&q2) == 1)
 					pthread_cond_broadcast(&cond);				
 			}
 			pthread_mutex_unlock(&m);
-		
+
+
 		}
 		gettimeofday(&leave, NULL); 	
 	}
@@ -327,7 +334,7 @@ void *token(void *arg)
 
 		pthread_mutex_lock(&m);
 
-		if(g_PacketsCreated == params.n && My402ListEmpty(&q1)) {
+		if(g_TotalPackets == params.n && My402ListEmpty(&q1)) {
 			//fprintf(stderr, "No more Packets to process \n");
 			pthread_mutex_unlock(&m);
             		pthread_exit(0);
@@ -370,13 +377,13 @@ void *server(void *arg)
 	while(1) {
 
 			pthread_mutex_lock(&m);
-			if(My402ListEmpty(&q2) && My402ListEmpty(&q1) && g_PacketsCreated==params.n){
+			if(My402ListEmpty(&q2) && My402ListEmpty(&q1) && g_TotalPackets==params.n){
 				pthread_mutex_unlock(&m);
-				pthread_exit(1);
+				pthread_exit(0);
 				//break;
 			}
 
-			if(My402ListEmpty(&q2) && !My402ListEmpty(&q1) && g_PacketsCreated <= params.n){
+			if(My402ListEmpty(&q2) && !My402ListEmpty(&q1) && g_TotalPackets <= params.n){
 				pthread_cond_wait(&cond, &m);
 			}
 
@@ -407,7 +414,6 @@ void *server(void *arg)
 			packet->serviceEndTime = getTime(startTime,currentTime);
 			printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
 
-			g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
 			g_AvgPacketsInQ2 += (double)(packet->q2LeaveTime-packet->q2EnterTime);
 			g_AvgPacketsInS += (double)(packet->serviceEndTime - packet->serviceStartTime);
 
@@ -422,7 +428,7 @@ void *server(void *arg)
 			else
 				pthread_mutex_unlock(&m);
 			/*pthread_mutex_lock(&m);
-			if(My402ListEmpty(&q1) && g_PacketsCreated==params.n)
+			if(My402ListEmpty(&q1) && g_TotalPackets==params.n)
 				pthread_exit(1);
 			pthread_mutex_unlock(&m);*/
 	}
@@ -441,15 +447,15 @@ void displayStatistics(){
 	printf("\taverage packet inter-arrival time = \n");
 	printf("\taverage packet service time = \n\n");
 
-	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
-	printf("\taverage number of packets in Q2 = \n");
-	printf("\taverage number of packets at S = \n\n");
+	printf("\taverage number of packets in Q1 = %.6g\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
+	printf("\taverage number of packets in Q2 = %.6g\n", (double)(g_AvgPacketsInQ2/(getTime(startTime,currentTime))));
+	printf("\taverage number of packets at S = %.6g\n\n", (double)(g_AvgPacketsInS/(getTime(startTime,currentTime))));
 
-	printf("\taverage time a packet spent in system = \n");
+	printf("\taverage time a packet spent in system = %.6g\n", (double)(g_AvgTimePacketInSystem/(getTime(startTime,currentTime))));
 	printf("\tstandard deviation for time spent in system = \n\n");
 
-	printf("\ttoken drop probability = \n");
-	printf("\tpacket drop probability = \n\n");
+	printf("\ttoken drop probability = %.6f\n", (double)(g_TokensDropped)/(double)(g_TokenNumber));
+	printf("\tpacket drop probability = %.6f\n\n", (double)(g_PacketsDropped)/(double)(g_TotalPackets));
 
 }
 
