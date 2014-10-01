@@ -365,6 +365,13 @@ void *token(void *arg)
 
 void *server(void *arg)
 { 
+	int error;
+	error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+	if (error != 0) {
+		fprintf(stderr, "\nCannot set DISABLE condition while canceling Server thread :[%s]", strerror(error));
+		pthread_exit(0);
+	}
+
 	struct timeval currentTime, processTime;
 	//prevArrival = startTime;
 	while(1) {
@@ -380,46 +387,58 @@ void *server(void *arg)
 				pthread_cond_wait(&cond, &m);
 			}
 
+
 			pthread_mutex_unlock(&m);
 			gettimeofday(&processTime, NULL);
 
 			pthread_mutex_lock(&m);
 			if(!My402ListEmpty(&q2)) {
 
-			Packet *packet = (Packet *)(My402ListFirst(&q2)->obj);
-			gettimeofday(&currentTime, NULL);
+				Packet *packet = (Packet *)(My402ListFirst(&q2)->obj);
+				gettimeofday(&currentTime, NULL);
 
-			//My402ListUnlink(&q2, My402ListFirst(&q2));
-			pthread_mutex_unlock(&m);
+				//My402ListUnlink(&q2, My402ListFirst(&q2));
+				pthread_mutex_unlock(&m);
 
-			packet->q2LeaveTime = getTime(startTime,currentTime);
-			printf("%012.3fms: p%d leaves Q2, time in Q2 = %.3fms\n", packet->q2LeaveTime, packet->packetNo, (packet->q2LeaveTime)-(packet->q2EnterTime));
+				packet->q2LeaveTime = getTime(startTime,currentTime);
+				printf("%012.3fms: p%d leaves Q2, time in Q2 = %.3fms\n", packet->q2LeaveTime, packet->packetNo, (packet->q2LeaveTime)-(packet->q2EnterTime));
 
-			gettimeofday(&currentTime, NULL);
-			packet->serviceStartTime = getTime(startTime,currentTime);
-			printf("%012.3fms: p%d begins service at S, requesting %.3fms of service\n", packet->serviceStartTime, packet->packetNo, packet->serviceTime);
+				error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+				if (error != 0) {
+					fprintf(stderr, "\nCannot set DISABLE condition while canceling Server thread :[%s]", strerror(error));
+					pthread_exit(0);
+				}
+				gettimeofday(&currentTime, NULL);
+				packet->serviceStartTime = getTime(startTime,currentTime);
+				printf("%012.3fms: p%d begins service at S, requesting %.3fms of service\n", packet->serviceStartTime, packet->packetNo, packet->serviceTime);
 
-			gettimeofday(&currentTime, NULL);
-			if(packet->serviceTime > getTime(processTime,currentTime))
-				usleep(1000*(packet->serviceTime - getTime(processTime,currentTime)));
+				gettimeofday(&currentTime, NULL);
+				if(packet->serviceTime > getTime(processTime,currentTime))
+					usleep(1000*(packet->serviceTime - getTime(processTime,currentTime)));
 
-			gettimeofday(&currentTime, NULL);
-			packet->serviceEndTime = getTime(startTime,currentTime);
-			printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
+				gettimeofday(&currentTime, NULL);
+				packet->serviceEndTime = getTime(startTime,currentTime);
+				printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
 
-			g_AvgPacketServiceTime += (packet->serviceEndTime) - (packet->serviceStartTime);
+				g_AvgPacketServiceTime += (packet->serviceEndTime) - (packet->serviceStartTime);
 
-			g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
-			g_AvgPacketsInQ2 += (double)(packet->q2LeaveTime-packet->q2EnterTime);
-			g_AvgPacketsInS += (double)(packet->serviceEndTime - packet->serviceStartTime);
+				g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
+				g_AvgPacketsInQ2 += (double)(packet->q2LeaveTime-packet->q2EnterTime);
+				g_AvgPacketsInS += (double)(packet->serviceEndTime - packet->serviceStartTime);
 
-			g_AvgTimePacketInSystem += (double)(packet->serviceEndTime - packet->arrivalTime);
-			g_AvgTimePacketInSystem_Square += ((packet->serviceEndTime - packet->arrivalTime))*((packet->serviceEndTime - packet->arrivalTime));
-			g_PacketsCompleted++;
+				g_AvgTimePacketInSystem += (double)(packet->serviceEndTime - packet->arrivalTime);
+				g_AvgTimePacketInSystem_Square += ((packet->serviceEndTime - packet->arrivalTime))*((packet->serviceEndTime - packet->arrivalTime));
+				g_PacketsCompleted++;
 
-			pthread_mutex_lock(&m);
-			My402ListUnlink(&q2, My402ListFirst(&q2));
-			pthread_mutex_unlock(&m);
+				pthread_mutex_lock(&m);
+				My402ListUnlink(&q2, My402ListFirst(&q2));
+				pthread_mutex_unlock(&m);
+
+				error = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+				if (error != 0) {
+					fprintf(stderr, "\nCannot set ENABLE condition for canceling Server thread :[%s]", strerror(error));
+					pthread_exit(0);
+				}
 			}
 			else
 				pthread_mutex_unlock(&m);
@@ -431,6 +450,25 @@ void *server(void *arg)
 	return NULL;
 }
 
+void clearQueues(){
+
+	struct timeval currentTime;
+	//Q1
+	//pthread_mutex_lock(&m);
+	while(!My402ListEmpty(&q1)) {
+
+	Packet *packet = (Packet *)(My402ListFirst(&q1)->obj);
+	gettimeofday(&currentTime, NULL);
+
+	printf("%012.3fms: p%d leaves Q1", getTime(startTime,currentTime), packet->packetNo);
+	//My402ListUnlink(&q1, My402ListFirst(&q1));
+	//pthread_mutex_unlock(&m);
+	My402ListUnlink(&q1, My402ListFirst(&q1));
+	}
+
+
+
+}
 void *sighandler (void *arg)
 {
 	sigset_t *set = arg;
@@ -442,14 +480,18 @@ void *sighandler (void *arg)
 		   printf("Error receiving signal %d", s);
 		   exit(0);
 	   }
-	   printf("Murder!!!!!\n\n");
+	   printf("Murder1!!!!!\n\n");
 	   pthread_kill (arrivalThread, SIGTERM);
+	   printf("Murder123!!!!!\n\n");
 	   pthread_kill (tokenThread, SIGTERM);
 	   /*Free data structures*/
-
 	   /*Check if packet is being processed currently*/
 
-	   pthread_kill (serverThread, SIGTERM);
+	   printf("Murder2!!!!!\n\n");
+	   pthread_cancel (serverThread);
+
+	   printf("Murder3!!!!!\n\n");
+	   clearQueues();
 	}
 }
 
