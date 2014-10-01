@@ -60,7 +60,7 @@ void setDefaultParameters(){
 	params.mu = 0.35;
 	params.B = 10;
 	params.P = 3;
-	params.n = 20;
+	params.n = 4;
 	params.fileName = NULL;
 }
 
@@ -240,7 +240,7 @@ void *arrival(void *arg)
 		Packet *packet = (Packet *)malloc(sizeof(Packet));
 		if(packet == NULL){
 			fprintf(stderr, "Error while creating packet\n");
-            		exit(1);
+            exit(1);
 		}
 
 		if(traceDriven){
@@ -261,9 +261,11 @@ void *arrival(void *arg)
 		
 		gettimeofday(&currentTime, NULL);
 		packet->arrivalTime = getTime(startTime,currentTime);
+
+
+		//g_AvgPacketInterArrivalTime += packet->interArrivalTime;
+		g_AvgPacketInterArrivalTime += getTime(prevArrival,currentTime);
 		prevArrival = currentTime;
-		
-		g_AvgPacketInterArrivalTime += packet->interArrivalTime;
 		
 		//remove packet if tokens required is more than depth B
 		if((packet->tokensRequired) > (params.B)) {
@@ -404,7 +406,7 @@ void *server(void *arg)
 			packet->serviceEndTime = getTime(startTime,currentTime);
 			printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
 
-			g_AvgPacketServiceTime += packet->serviceTime;
+			g_AvgPacketServiceTime += (packet->serviceEndTime) - (packet->serviceStartTime);
 
 			g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
 			g_AvgPacketsInQ2 += (double)(packet->q2LeaveTime-packet->q2EnterTime);
