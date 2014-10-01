@@ -220,7 +220,6 @@ void movePktFromQ1toQ2(){
 	
 	printf("%012.3fms: p%d leaves Q1, time in Q1 = %.3fms, token bucket now has %d tokens\n", packet->q1LeaveTime, packet->packetNo, packet->q1LeaveTime-packet->q1EnterTime, g_TokensInBucket);
 		
-	g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
 	My402ListAppend(&q2, (void *)(packet));
 	gettimeofday(&currentTime, NULL);
 	packet->q2EnterTime = getTime(startTime, currentTime);
@@ -265,7 +264,6 @@ void *arrival(void *arg)
 		prevArrival = currentTime;
 		
 		g_AvgPacketInterArrivalTime += packet->interArrivalTime;
-		g_AvgPacketServiceTime += packet->serviceTime;
 		
 		//remove packet if tokens required is more than depth B
 		if((packet->tokensRequired) > (params.B)) {
@@ -406,6 +404,9 @@ void *server(void *arg)
 			packet->serviceEndTime = getTime(startTime,currentTime);
 			printf("%012.3fms: p%d departs from S, service time = %.3fms, time in system = %.3fms\n", packet->serviceEndTime, packet->packetNo, (packet->serviceEndTime) - (packet->serviceStartTime), (packet->serviceEndTime) - (packet->arrivalTime));
 
+			g_AvgPacketServiceTime += packet->serviceTime;
+
+			g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
 			g_AvgPacketsInQ2 += (double)(packet->q2LeaveTime-packet->q2EnterTime);
 			g_AvgPacketsInS += (double)(packet->serviceEndTime - packet->serviceStartTime);
 
@@ -458,8 +459,8 @@ void displayStatistics(){
 
 	printf("\nStatistics:\n\n");
 
-	printf("\taverage packet inter-arrival time = %.6f\n", (double)(g_AvgPacketInterArrivalTime/(getTime(startTime,currentTime))));
-	printf("\taverage packet service time = %.6f\n\n", (double)(g_AvgPacketServiceTime/(getTime(startTime,currentTime))));
+	printf("\taverage packet inter-arrival time = %.6f\n", 1000.0*(double)(g_AvgPacketInterArrivalTime/(double)(g_TotalPackets)));
+	printf("\taverage packet service time = %.6f\n\n", 1000.0*(double)(g_AvgPacketServiceTime/(double)(g_PacketsCompleted)));
 
 	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
 	printf("\taverage number of packets in Q2 = %.6f\n", (double)(g_AvgPacketsInQ2/(getTime(startTime,currentTime))));
