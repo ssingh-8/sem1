@@ -30,6 +30,7 @@ pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 pthread_t arrivalThread;
 pthread_t tokenThread;
 pthread_t serverThread;
+pthread_t sigThread;
 
 sigset_t set;
 
@@ -425,6 +426,28 @@ void *server(void *arg)
 	return NULL;
 }
 
+void *sighandler (void *arg)
+{
+	sigset_t *set = arg;
+	int s, sig;
+
+	for (;;) {
+	   s = sigwait(set, &sig);
+	   if (s != 0){
+		   printf("Error receiving signal %d", s);
+		   exit(0);
+	   }
+	   printf("Murder!!!!!\n\n");
+	   pthread_kill (arrivalThread, SIGTERM);
+	   pthread_kill (tokenThread, SIGTERM);
+	   /*Free data structures*/
+
+	   /*Check if packet is being processed currently*/
+
+	   pthread_kill (serverThread, SIGTERM);
+	}
+}
+
 void displayStatistics(){
 
 	struct timeval currentTime;
@@ -501,7 +524,10 @@ int main(int argc, char *argv[])
             	fprintf(stderr, "\nlcan't create server thread :[%s]", strerror(error));
 		exit(1);
 	}
-
+	if((error = pthread_create(&sigThread, 0, sighandler, (void *)&set))){
+	            	fprintf(stderr, "\nlcan't create Signal thread :[%s]", strerror(error));
+		exit(1);
+	}
 	
 	pthread_join(arrivalThread,0);
 	pthread_join(tokenThread,0);
