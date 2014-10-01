@@ -212,9 +212,7 @@ void movePktFromQ1toQ2(){
 	Packet *packet = (Packet *)(elem->obj);			
 	
 	g_TokensInBucket -= packet->tokensRequired;
-	pthread_mutex_lock(&m);
 	My402ListUnlink(&q1, elem);	
-	pthread_mutex_unlock(&m);
 	
 	gettimeofday(&currentTime, NULL);
 	packet->q1LeaveTime = getTime(startTime, currentTime);
@@ -222,11 +220,7 @@ void movePktFromQ1toQ2(){
 	printf("%012.3fms: p%d leaves Q1, time in Q1 = %.3fms, token bucket now has %d tokens\n", packet->q1LeaveTime, packet->packetNo, packet->q1LeaveTime-packet->q1EnterTime, g_TokensInBucket);
 		
 	g_AvgPacketsInQ1 += (double)(packet->q1LeaveTime-packet->q1EnterTime);
-
-	pthread_mutex_lock(&m);
 	My402ListAppend(&q2, (void *)(packet));
-	pthread_mutex_unlock(&m);
-
 	gettimeofday(&currentTime, NULL);
 	packet->q2EnterTime = getTime(startTime, currentTime);
 	printf("%012.3fms: p%d enters Q2\n", packet->q2EnterTime, packet->packetNo);
@@ -286,7 +280,6 @@ void *arrival(void *arg)
 			pthread_mutex_lock(&m);
 			g_TotalPackets++;
 			My402ListAppend(&q1, (void *)(packet));
-			pthread_mutex_unlock(&m);
 
 			gettimeofday(&currentTime, NULL);
 			packet->q1EnterTime = getTime(startTime, currentTime);
@@ -294,7 +287,6 @@ void *arrival(void *arg)
 	
 			Packet *headPacket = (Packet *)(My402ListFirst(&q1)->obj);
 			
-			pthread_mutex_lock(&m);
 			if((headPacket->tokensRequired) <= g_TokensInBucket) {
 				pthread_mutex_unlock(&m);
 				movePktFromQ1toQ2();
