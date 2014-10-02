@@ -463,8 +463,8 @@ void clearQueues(){
 	//printf("Clear Queues\n\n");
 	while(!My402ListEmpty(&q1)) {
 
-	Packet *packet = (Packet *)(My402ListFirst(&q1)->obj);
-	gettimeofday(&currentTime, NULL);
+		Packet *packet = (Packet *)(My402ListFirst(&q1)->obj);
+		gettimeofday(&currentTime, NULL);
 
 		printf("%012.3fms: p%d removed from Q1\n", getTime(startTime,currentTime), packet->packetNo);
 		My402ListUnlink(&q1, My402ListFirst(&q1));
@@ -486,15 +486,14 @@ void clearQueues(){
 void *sighandler (void *arg)
 {
 	sigset_t set;
-	int s, sig;
+	int s;
         sigemptyset(&set);
         sigaddset(&set,SIGINT);
-
 	for (;;) {
-	   s = sigwait(&set, &sig);
+	   s = sigwait(&set);
 	   if (s != 0){
-		   printf("Error receiving signal %d", s);
-		   exit(0);
+	   	   printf("Error receiving signal %d", s);
+	   	   exit(0);
 	   }
 	   pthread_mutex_lock(&m);
 	   gSighandlerDone = 1;

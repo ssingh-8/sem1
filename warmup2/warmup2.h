@@ -40,6 +40,13 @@ void setDefaultParameters();
 void printEmulationParameters();
 void displayStatistics();
 Packet *createPacket();
+void parseLine(Packet *);
+void movePktFromQ1toQ2();
+void sigsubhandler(int sig);
+void clearQueues();
+void *sighandler (void *arg);
+void displayStatistics();
+
 
 void *arrival(void *);
 void *token(void *);
