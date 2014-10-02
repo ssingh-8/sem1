@@ -458,12 +458,13 @@ void *server(void *arg)
 	}
 	return NULL;
 }
-
+int gSighandlerDone = 0;
 void clearQueues(){
 
 	struct timeval currentTime;
 	//Q1
 	//pthread_mutex_lock(&m);
+	printf("Clear Queues\n\n");
 	while(!My402ListEmpty(&q1)) {
 
 	Packet *packet = (Packet *)(My402ListFirst(&q1)->obj);
@@ -474,15 +475,15 @@ void clearQueues(){
 	//pthread_mutex_unlock(&m);
 	My402ListUnlink(&q1, My402ListFirst(&q1));
 	}
-
-
-
+	return;
 }
 void *sighandler (void *arg)
 {
 	sigset_t *set = arg;
 	int s, sig;
-
+	pthread_mutex_lock(&m);
+	gSighandlerDone = 1;
+	pthread_mutex_unlock(&m);
 	for (;;) {
 	   s = sigwait(set, &sig);
 	   if (s != 0){
@@ -498,9 +499,10 @@ void *sighandler (void *arg)
 
 	   printf("Murder2!!!!!\n\n");
 	   pthread_cancel (serverThread);
-
 	   printf("Murder3!!!!!\n\n");
-	   clearQueues();
+	   pthread_join(serverThread, 0);
+	   printf("Murder4!!!!!\n\n");
+	   break;
 	}
 }
 
@@ -610,9 +612,14 @@ int main(int argc, char *argv[])
 	pthread_join(arrivalThread,0);
 	pthread_join(tokenThread,0);
 	pthread_join(serverThread,0);
-
+	clearQueues();
 	displayStatistics();
     	//pause();
     	//sleep(1);
+	/*pthread_mutex_lock(&m);
+	if (gSighandlerDone == 1){
+		pthread_join(sigThread,0);
+	}*/
+	pthread_mutex_unlock(&m);
 	return 0;
 }
