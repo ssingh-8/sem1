@@ -40,7 +40,7 @@ char fileBuf[1026];
 My402List q1,q2;
 Parameters params;
 int traceDriven = 0;
-int gSighandlerDone = 0;
+volatile int gSighandlerDone = 0;
 
 struct timeval startTime;
 
@@ -498,8 +498,6 @@ void *sighandler (void *arg)
 {
 	sigset_t *set = arg;
 	int s, sig;
-
-	pthread_mutex_unlock(&m);
 	for (;;) {
 	   s = sigwait(set, &sig);
 	   if (s != 0){
@@ -508,14 +506,15 @@ void *sighandler (void *arg)
 	   }
 	   pthread_mutex_lock(&m);
 	   gSighandlerDone = 1;
-	   pthread_cond_broadcast(&cond);
+	   //pthread_cond_broadcast(&cond);
+	   pthread_mutex_unlock(&m);
 
 	   pthread_kill (arrivalThread, SIGUSR1);
 	   pthread_kill (tokenThread, SIGUSR1);
 
 	   clearQueues();
-	   pthread_cancel (serverThread);
-	   pthread_join(serverThread, 0);
+	   //pthread_cancel (serverThread);
+	   //pthread_join(serverThread, 0);
 	   break;
 	}
 	return NULL;
@@ -524,9 +523,9 @@ void *sighandler (void *arg)
 void displayStatistics(){
 
 	struct timeval currentTime;
-	double endTime;
+	//double endTime;
 	gettimeofday(&currentTime, NULL);
-	endTime = (double)(getTime(startTime,currentTime)-10000.0);
+	//endTime = (double)(getTime(startTime,currentTime)-10000.0);
 
 	printf("%012.3fms: emulation ends\n",(double)(getTime(startTime,currentTime)));
 
@@ -542,9 +541,9 @@ void displayStatistics(){
 	else
 		printf("\taverage packet service time = N/A (no packet arrived at server)\n\n");
 
-	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/endTime));
-	printf("\taverage number of packets in Q2 = %.6f\n", (double)(g_AvgPacketsInQ2/endTime));
-	printf("\taverage number of packets at S = %.6f\n\n", (double)(g_AvgPacketsInS/endTime));
+	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/getTime(startTime,currentTime)));
+	printf("\taverage number of packets in Q2 = %.6f\n", (double)(g_AvgPacketsInQ2/getTime(startTime,currentTime)));
+	printf("\taverage number of packets at S = %.6f\n\n", (double)(g_AvgPacketsInS/getTime(startTime,currentTime)));
 
 	if(g_PacketsCompleted != 0)
 		printf("\taverage time a packet spent in system = %.6f seconds\n", (double)(g_AvgTimePacketInSystem/(double)(g_PacketsCompleted)/1000.0));
@@ -640,6 +639,6 @@ int main(int argc, char *argv[])
 	if (gSighandlerDone == 1){
 		pthread_join(sigThread,0);
 	}*/
-	pthread_mutex_unlock(&m);
+	//pthread_mutex_unlock(&m);
 	return 0;
 }
