@@ -427,8 +427,8 @@ void *server(void *arg)
 				My402ListUnlink(&q2, My402ListFirst(&q2));
 				pthread_mutex_unlock(&m);
 
-				gettimeofday(&currentTime, NULL);
-				packet->serviceStartTime = getTime(startTime,currentTime);
+				//gettimeofday(&currentTime, NULL);
+				packet->serviceStartTime = getTime(startTime,processTime);
 				printf("%012.3fms: p%d begins service at S, requesting %.3fms of service\n", packet->serviceStartTime, packet->packetNo, packet->serviceTime);
 
 				gettimeofday(&currentTime, NULL);
