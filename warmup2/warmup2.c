@@ -228,6 +228,13 @@ void movePktFromQ1toQ2(){
 
 }
 
+void sigsubhandler(int sig)
+{
+	printf("Caught signal:%d\n",sig);
+	if (pthread_mutex_trylock(&m)==0)
+		pthread_mutex_unlock(&m);
+	pthread_exit(0);
+}
 
 void *arrival(void *arg)
 {   
@@ -236,6 +243,7 @@ void *arrival(void *arg)
 	prevArrival = startTime;
 	leave = startTime;
 	int i;
+	signal(SIGUSR1,sigsubhandler);
 	for(i = 0; i < params.n; i++){
 
 		Packet *packet = (Packet *)malloc(sizeof(Packet));
@@ -309,7 +317,8 @@ void *token(void *arg)
 	struct timeval currentTime, prevArrival, leave;
 	prevArrival = startTime;
 	leave = startTime;
-	
+
+	signal(SIGUSR1,sigsubhandler);
 	double tokenWaitTime = 1000.0/params.r;
 	while(1) {
 
@@ -366,11 +375,11 @@ void *token(void *arg)
 void *server(void *arg)
 { 
 	int error;
-	error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+	/*error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	if (error != 0) {
 		fprintf(stderr, "\nCannot set DISABLE condition while canceling Server thread :[%s]", strerror(error));
 		pthread_exit(0);
-	}
+	}*/
 
 	struct timeval currentTime, processTime;
 	//prevArrival = startTime;
@@ -481,9 +490,9 @@ void *sighandler (void *arg)
 		   exit(0);
 	   }
 	   printf("Murder1!!!!!\n\n");
-	   pthread_kill (arrivalThread, SIGTERM);
+	   pthread_kill (arrivalThread, SIGUSR1);
 	   printf("Murder123!!!!!\n\n");
-	   pthread_kill (tokenThread, SIGTERM);
+	   pthread_kill (tokenThread, SIGUSR1);
 	   /*Free data structures*/
 	   /*Check if packet is being processed currently*/
 
