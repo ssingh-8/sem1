@@ -40,6 +40,7 @@ char fileBuf[1026];
 My402List q1,q2;
 Parameters params;
 int traceDriven = 0;
+int gSighandlerDone = 0;
 
 struct timeval startTime;
 
@@ -263,7 +264,7 @@ void *arrival(void *arg)
 		
 		packet->packetNo = g_TotalPackets + 1;
 
-		gettimeofday(&currentTime, NULL);
+		gettimeofday(&leave, NULL);
 
 		if(packet->interArrivalTime > getTime(prevArrival,leave))
 			usleep(1000*(packet->interArrivalTime - getTime(prevArrival,leave)));
@@ -307,8 +308,9 @@ void *arrival(void *arg)
 
 
 		}
-		gettimeofday(&leave, NULL); 	
+		//gettimeofday(&leave, NULL);
 	}
+
 	return NULL;
 }
 
@@ -344,7 +346,7 @@ void *token(void *arg)
 		pthread_mutex_unlock(&m);
 
 		
-		gettimeofday(&currentTime, NULL);
+		gettimeofday(&leave, NULL);
 		if(tokenWaitTime > getTime(prevArrival,leave))
 			usleep(1000*(tokenWaitTime - getTime(prevArrival,leave)));
 
@@ -366,7 +368,7 @@ void *token(void *arg)
 		}
 		pthread_mutex_unlock(&m);
 
-		gettimeofday(&leave, NULL); 	
+		//gettimeofday(&leave, NULL);
 	}
 	
 	return NULL;
@@ -374,7 +376,7 @@ void *token(void *arg)
 
 void *server(void *arg)
 { 
-	int error;
+	//int error;
 	/*error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	if (error != 0) {
 		fprintf(stderr, "\nCannot set DISABLE condition while canceling Server thread :[%s]", strerror(error));
@@ -386,13 +388,13 @@ void *server(void *arg)
 	while(1) {
 
 			pthread_mutex_lock(&m);
-			if(My402ListEmpty(&q2) && My402ListEmpty(&q1) && g_TotalPackets==params.n){
+			if(gSighandlerDone == 1 || (My402ListEmpty(&q2) && My402ListEmpty(&q1) && g_TotalPackets==params.n)){
 				pthread_mutex_unlock(&m);
 				pthread_exit(0);
 				//break;
 			}
 
-			if(My402ListEmpty(&q2) && !My402ListEmpty(&q1) && g_TotalPackets <= params.n){
+			if(gSighandlerDone == 1 || (My402ListEmpty(&q2) && !My402ListEmpty(&q1) && g_TotalPackets <= params.n)){
 				pthread_cond_wait(&cond, &m);
 			}
 
@@ -400,8 +402,10 @@ void *server(void *arg)
 			pthread_mutex_unlock(&m);
 			gettimeofday(&processTime, NULL);
 
+
 			pthread_mutex_lock(&m);
-			if(!My402ListEmpty(&q2)) {
+			if(gSighandlerDone != 1 && (!My402ListEmpty(&q2))) {
+
 
 				Packet *packet = (Packet *)(My402ListFirst(&q2)->obj);
 				gettimeofday(&currentTime, NULL);
@@ -412,11 +416,15 @@ void *server(void *arg)
 				packet->q2LeaveTime = getTime(startTime,currentTime);
 				printf("%012.3fms: p%d leaves Q2, time in Q2 = %.3fms\n", packet->q2LeaveTime, packet->packetNo, (packet->q2LeaveTime)-(packet->q2EnterTime));
 
-				error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-				if (error != 0) {
-					fprintf(stderr, "\nCannot set DISABLE condition while canceling Server thread :[%s]", strerror(error));
-					pthread_exit(0);
-				}
+				/*error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+								if (error != 0) {
+									fprintf(stderr, "\nCannot set DISABLE condition while canceling Server thread :[%s]", strerror(error));
+									pthread_exit(0);
+				}*/
+				pthread_mutex_lock(&m);
+				My402ListUnlink(&q2, My402ListFirst(&q2));
+				pthread_mutex_unlock(&m);
+
 				gettimeofday(&currentTime, NULL);
 				packet->serviceStartTime = getTime(startTime,currentTime);
 				printf("%012.3fms: p%d begins service at S, requesting %.3fms of service\n", packet->serviceStartTime, packet->packetNo, packet->serviceTime);
@@ -439,16 +447,17 @@ void *server(void *arg)
 				g_AvgTimePacketInSystem_Square += ((packet->serviceEndTime - packet->arrivalTime))*((packet->serviceEndTime - packet->arrivalTime));
 				g_PacketsCompleted++;
 
-				pthread_mutex_lock(&m);
-				My402ListUnlink(&q2, My402ListFirst(&q2));
-				pthread_mutex_unlock(&m);
 
-				error = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+				/*error = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 				if (error != 0) {
 					fprintf(stderr, "\nCannot set ENABLE condition for canceling Server thread :[%s]", strerror(error));
 					pthread_exit(0);
-				}
+				}*/
 			}
+			/*else if(gSighandlerDone == 1){
+				pthread_mutex_unlock(&m);
+				pthread_exit(0);
+			}*/
 			else
 				pthread_mutex_unlock(&m);
 			/*pthread_mutex_lock(&m);
@@ -458,7 +467,7 @@ void *server(void *arg)
 	}
 	return NULL;
 }
-int gSighandlerDone = 0;
+
 void clearQueues(){
 
 	struct timeval currentTime;
@@ -489,8 +498,7 @@ void *sighandler (void *arg)
 {
 	sigset_t *set = arg;
 	int s, sig;
-	pthread_mutex_lock(&m);
-	gSighandlerDone = 1;
+
 	pthread_mutex_unlock(&m);
 	for (;;) {
 	   s = sigwait(set, &sig);
@@ -498,9 +506,14 @@ void *sighandler (void *arg)
 		   printf("Error receiving signal %d", s);
 		   exit(0);
 	   }
+	   pthread_mutex_lock(&m);
+	   gSighandlerDone = 1;
+	   pthread_cond_broadcast(&cond);
+
 	   pthread_kill (arrivalThread, SIGUSR1);
 	   pthread_kill (tokenThread, SIGUSR1);
 
+	   clearQueues();
 	   pthread_cancel (serverThread);
 	   pthread_join(serverThread, 0);
 	   break;
@@ -511,9 +524,11 @@ void *sighandler (void *arg)
 void displayStatistics(){
 
 	struct timeval currentTime;
+	double endTime;
 	gettimeofday(&currentTime, NULL);
+	endTime = (double)(getTime(startTime,currentTime)-10000.0);
 
-	printf("%012.3fms: emulation ends\n",getTime(startTime,currentTime));
+	printf("%012.3fms: emulation ends\n",(double)(getTime(startTime,currentTime)));
 
 	printf("\nStatistics:\n\n");
 
@@ -527,9 +542,9 @@ void displayStatistics(){
 	else
 		printf("\taverage packet service time = N/A (no packet arrived at server)\n\n");
 
-	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/(getTime(startTime,currentTime))));
-	printf("\taverage number of packets in Q2 = %.6f\n", (double)(g_AvgPacketsInQ2/(getTime(startTime,currentTime))));
-	printf("\taverage number of packets at S = %.6f\n\n", (double)(g_AvgPacketsInS/(getTime(startTime,currentTime))));
+	printf("\taverage number of packets in Q1 = %.6f\n", (double)(g_AvgPacketsInQ1/endTime));
+	printf("\taverage number of packets in Q2 = %.6f\n", (double)(g_AvgPacketsInQ2/endTime));
+	printf("\taverage number of packets at S = %.6f\n\n", (double)(g_AvgPacketsInS/endTime));
 
 	if(g_PacketsCompleted != 0)
 		printf("\taverage time a packet spent in system = %.6f seconds\n", (double)(g_AvgTimePacketInSystem/(double)(g_PacketsCompleted)/1000.0));
@@ -614,8 +629,11 @@ int main(int argc, char *argv[])
 	pthread_join(arrivalThread,0);
 	pthread_join(tokenThread,0);
 	pthread_join(serverThread,0);
-	clearQueues();
+
+	//usleep(10000000);
+	//clearQueues();
 	displayStatistics();
+
     	//pause();
     	//sleep(1);
 	/*pthread_mutex_lock(&m);
