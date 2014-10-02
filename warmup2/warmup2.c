@@ -394,7 +394,7 @@ void *server(void *arg)
 				//break;
 			}
 
-			if(gSighandlerDone == 1 || (My402ListEmpty(&q2) && !My402ListEmpty(&q1) && g_TotalPackets <= params.n)){
+			if(gSighandlerDone != 1 && (My402ListEmpty(&q2) && !My402ListEmpty(&q1) && g_TotalPackets <= params.n)){
 				pthread_cond_wait(&cond, &m);
 			}
 
