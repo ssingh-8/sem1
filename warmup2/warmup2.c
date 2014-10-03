@@ -498,7 +498,7 @@ void *sighandler (void *arg)
 	   }
 	   pthread_mutex_lock(&m);
 	   gSighandlerDone = 1;
-	   //pthread_cond_broadcast(&cond);
+	   pthread_cond_broadcast(&cond);
 	   pthread_mutex_unlock(&m);
 
 	   pthread_kill (arrivalThread, SIGUSR1);
@@ -537,10 +537,13 @@ void displayStatistics(){
 	if(g_PacketsCompleted != 0){
 		printf("    average time a packet spent in system = %.6f seconds\n", (double)(g_AvgTimePacketInSystem/(double)(g_PacketsCompleted)/1000.0));
 
-		g_StandardDeviation = sqrt((g_AvgTimePacketInSystem_Square/g_PacketsCompleted/1000000.0)-((g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)*(g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)));
-		if(g_StandardDeviation < 0.000000001)
-			g_StandardDeviation = 0.000000;
-		printf("    standard deviation for time spent in system = %.6f seconds\n\n", g_StandardDeviation);
+		double difference = (g_AvgTimePacketInSystem_Square/g_PacketsCompleted/1000000.0)-((g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0)*(g_AvgTimePacketInSystem/g_PacketsCompleted/1000.0));
+		if(difference < 0.0000001)
+			g_StandardDeviation = 0.0;
+		else
+			g_StandardDeviation = sqrt(difference);
+
+		printf("    standard deviation for time spent in system = %.6f seconds\n\n", (double)(g_StandardDeviation));
 	}
 	else {
 		printf("    average time a packet spent in system = N/A (no packet arrived at server)\n");
